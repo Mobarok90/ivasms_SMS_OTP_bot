@@ -1,4 +1,2 @@
 pyTelegramBotAPI
-selenium
-undetected-chromedriver
-webdriver-manager
+seleniumbase
