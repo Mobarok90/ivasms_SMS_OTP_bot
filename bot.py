@@ -30,7 +30,7 @@ SERVICE_LOGOS = {
 ALLOWED_SERVICES = list(SERVICE_LOGOS.keys())
 
 # ==========================================
-# 🌍 MASSIVE COUNTRY DICTIONARY
+# 🌍 MASSIVE COUNTRY DICTIONARY (230+ Countries)
 # ==========================================
 COUNTRY_DICT = {
     "1": ("USA/Canada", "🇺🇸/🇨🇦"), "7": ("Russia/KZ", "🇷🇺/🇰🇿"), "20": ("Egypt", "🇪🇬"), 
@@ -109,7 +109,7 @@ def get_clean_message(text):
     return re.sub(r'\s+', ' ', text).replace('<', '').replace('>', '').strip()
 
 # ==========================================
-# 🌐 SELENIUMBASE AUTO-LOGIN & SCRAPER
+# 🌐 SELENIUMBASE AUTO-LOGIN & XHR SCRAPER
 # ==========================================
 
 def monitor_ranges():
@@ -118,7 +118,6 @@ def monitor_ranges():
     print("🚀 Booting up invisible Chrome Browser (SeleniumBase UC Mode)...")
     
     try:
-        # SeleniumBase UC (Undetected) Mode
         driver = Driver(uc=True, headless=False)
         
         print("🔐 Navigating to iVASMS login page...")
@@ -126,10 +125,9 @@ def monitor_ranges():
         
         print("⏳ Bypassing Cloudflare Turnstile...")
         try:
-            # AI Auto-Clicker for Cloudflare Captcha
             driver.uc_gui_click_captcha()
         except Exception:
-            pass # If it auto-passes, ignore error
+            pass 
             
         print("⏳ Waiting for Email Field...")
         driver.wait_for_element('input[name="email"]', timeout=40)
@@ -139,24 +137,61 @@ def monitor_ranges():
         driver.type('input[name="password"]', PASSWORD)
         driver.click('button[type="submit"]')
         
-        print("✅ Login Clicked! Waiting for dashboard...")
-        time.sleep(10) 
+        print("✅ Login Clicked! Waiting 15s for dashboard to fully load...")
+        time.sleep(15) # লগইন কমপ্লিট হয়ে ড্যাশবোর্ডে যাওয়ার জন্য পর্যাপ্ত সময়
         
-        print("📡 Starting 24/7 API Monitoring...")
+        # লগইন সফল হয়েছে কিনা চেক করা
+        current_url = driver.get_current_url()
+        if "login" in current_url:
+            print("⚠️ Warning: Bot might still be on login page. Trying to proceed anyway...")
+        else:
+            print("✅ Dashboard accessed successfully!")
+        
+        print("📡 Starting 24/7 Background API Monitoring...")
+        
+        # 🧠 আল্ট্রা-স্মার্ট XHR Fetch Script (যাতে সার্ভার বোঝে এটা আসল ড্যাশবোর্ড)
+        fetch_script = """
+        var callback = arguments[arguments.length - 1];
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', arguments[0], true);
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        xhr.setRequestHeader('Accept', 'application/json, text/javascript, */*; q=0.01');
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState == 4) {
+                callback(xhr.responseText);
+            }
+        };
+        xhr.send();
+        """
+        
+        driver.set_script_timeout(20)
+
         while True:
             try:
-                driver.get(API_URL)
-                time.sleep(3) 
+                # ⚠️ ব্রাউজার দিয়ে পেজ রিলোড না করে, ব্যাকগ্রাউন্ড স্ক্রিপ্ট দিয়ে ডাটা আনা হচ্ছে
+                page_text = driver.execute_async_script(fetch_script, API_URL)
                 
-                # Fetching data using SeleniumBase
-                page_text = driver.get_text("body")
-                json_data = json.loads(page_text)
+                # JSON এরর চেক করার জন্য স্মার্ট ট্রাই-ক্যাচ
+                try:
+                    json_data = json.loads(page_text)
+                except Exception as json_err:
+                    print(f"⚠️ Server didn't return JSON. Received data: {str(page_text)[:100]}...")
+                    # যদি সেশন এক্সপায়ার হয়ে যায়, পেজটা রিলোড দিয়ে সেশন ঠিক করবে
+                    if "<html" in str(page_text).lower():
+                        print("🔄 Session expired or blocked. Refreshing dashboard...")
+                        driver.refresh()
+                        time.sleep(5)
+                    time.sleep(10)
+                    continue
+
                 sms_list = json_data.get('data', [])
                 
                 if is_first_run:
+                    print(f"📥 Found {len(sms_list)} old ranges. Saving them quietly...")
                     for sms in sms_list:
                         seen_messages.add(str(sms.get('id', '')))
                     is_first_run = False
+                    time.sleep(5)
                     continue
 
                 for sms in reversed(sms_list):
