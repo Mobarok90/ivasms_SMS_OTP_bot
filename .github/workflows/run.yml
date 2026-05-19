@@ -32,4 +32,4 @@ jobs:
         EMAIL: ${{ secrets.EMAIL }}
         PASSWORD: ${{ secrets.PASSWORD }}
       run: |
-        xvfb-run --auto-servernum timeout 290m python bot.py || true
+        xvfb-run --auto-servernum timeout 290m python -u bot.py || true
