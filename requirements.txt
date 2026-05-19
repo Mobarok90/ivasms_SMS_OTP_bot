@@ -1,0 +1,4 @@
+pyTelegramBotAPI
+selenium
+undetected-chromedriver
+webdriver-manager
