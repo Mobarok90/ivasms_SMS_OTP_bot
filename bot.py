@@ -119,37 +119,38 @@ def monitor_ranges():
     
     try:
         driver = Driver(uc=True, headless=False)
+        driver.set_page_load_timeout(45) # ⚠️ পেজ লোড হওয়ার জন্য সর্বোচ্চ ৪৫ সেকেন্ড সময় দেওয়া হলো
         
         print("🔐 Navigating to iVASMS login page...")
-        driver.uc_open_with_reconnect("https://www.ivasms.com/login", 5)
+        try:
+            # Replaced reconnect loop with standard get to avoid hanging
+            driver.get("https://www.ivasms.com/login")
+        except Exception as e:
+            print(f"⚠️ Page load slow, forcing continuation... ({e})")
         
         print("⏳ Bypassing Cloudflare Turnstile...")
         try:
             driver.uc_gui_click_captcha()
+            time.sleep(2)
         except Exception:
             pass 
             
         print("⏳ Waiting for Email Field...")
-        driver.wait_for_element('input[name="email"]', timeout=40)
-        
-        print("✅ Cloudflare bypassed! Entering credentials...")
-        driver.type('input[name="email"]', EMAIL)
-        driver.type('input[name="password"]', PASSWORD)
-        driver.click('button[type="submit"]')
-        
-        print("✅ Login Clicked! Waiting 15s for dashboard to fully load...")
-        time.sleep(15) # লগইন কমপ্লিট হয়ে ড্যাশবোর্ডে যাওয়ার জন্য পর্যাপ্ত সময়
-        
-        # লগইন সফল হয়েছে কিনা চেক করা
-        current_url = driver.get_current_url()
-        if "login" in current_url:
-            print("⚠️ Warning: Bot might still be on login page. Trying to proceed anyway...")
-        else:
-            print("✅ Dashboard accessed successfully!")
+        try:
+            driver.wait_for_element('input[name="email"]', timeout=30)
+            print("✅ Cloudflare bypassed! Entering credentials...")
+            driver.type('input[name="email"]', EMAIL)
+            driver.type('input[name="password"]', PASSWORD)
+            driver.click('button[type="submit"]')
+            print("✅ Login Clicked! Waiting 15s for dashboard to fully load...")
+            time.sleep(15) 
+        except Exception as e:
+            print(f"❌ Could not find login boxes. Cloudflare might have blocked the IP: {e}")
+            driver.quit()
+            return # Exit and let the outer loop restart it later
         
         print("📡 Starting 24/7 Background API Monitoring...")
         
-        # 🧠 আল্ট্রা-স্মার্ট XHR Fetch Script (যাতে সার্ভার বোঝে এটা আসল ড্যাশবোর্ড)
         fetch_script = """
         var callback = arguments[arguments.length - 1];
         var xhr = new XMLHttpRequest();
@@ -168,15 +169,12 @@ def monitor_ranges():
 
         while True:
             try:
-                # ⚠️ ব্রাউজার দিয়ে পেজ রিলোড না করে, ব্যাকগ্রাউন্ড স্ক্রিপ্ট দিয়ে ডাটা আনা হচ্ছে
                 page_text = driver.execute_async_script(fetch_script, API_URL)
                 
-                # JSON এরর চেক করার জন্য স্মার্ট ট্রাই-ক্যাচ
                 try:
                     json_data = json.loads(page_text)
                 except Exception as json_err:
                     print(f"⚠️ Server didn't return JSON. Received data: {str(page_text)[:100]}...")
-                    # যদি সেশন এক্সপায়ার হয়ে যায়, পেজটা রিলোড দিয়ে সেশন ঠিক করবে
                     if "<html" in str(page_text).lower():
                         print("🔄 Session expired or blocked. Refreshing dashboard...")
                         driver.refresh()
