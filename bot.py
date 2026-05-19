@@ -31,7 +31,7 @@ SERVICE_LOGOS = {
 ALLOWED_SERVICES = list(SERVICE_LOGOS.keys())
 
 # ==========================================
-# 🌍 MASSIVE COUNTRY DICTIONARY
+# 🌍 MASSIVE COUNTRY DICTIONARY (230+ Countries)
 # ==========================================
 COUNTRY_DICT = {
     "1": ("USA/Canada", "🇺🇸/🇨🇦"), "7": ("Russia/KZ", "🇷🇺/🇰🇿"), "20": ("Egypt", "🇪🇬"), 
@@ -64,6 +64,7 @@ def set_bot_username(message):
                 bot.reply_to(message, f"✅ <b>Bot Link Updated:</b> @{USER_BOT_USERNAME}", parse_mode="HTML")
     except: pass
 
+# ⚠️ Super Smart Detection (AI Country Fallback)
 def get_country_and_exact_range(number, range_text):
     num_str = "".join(filter(str.isdigit, str(number)))
     while num_str.startswith('0'): num_str = num_str[1:]
@@ -86,10 +87,12 @@ def get_country_and_exact_range(number, range_text):
             country_info = f"{' '.join(letters_only).title()} 🏳️"
     return country_info, exact_range
 
+# ⚠️ Python Syntax FIXED here
 def get_clean_service(text):
     if not text: return "Unknown"
     text = re.split(r'<script|function|\$\(', str(text), flags=re.IGNORECASE)[0]
-    return re.sub(r'<[^>]+>', '', text).replace(/[^a-zA-Z0-9\s\-]/g, '').strip().upper()
+    text = re.sub(r'<[^>]+>', '', text)
+    return re.sub(r'[^a-zA-Z0-9\s\-]', '', text).strip().upper()
 
 def get_clean_message(text):
     if not text: return "No Text"
@@ -132,7 +135,7 @@ def get_fresh_cookies():
         user_agent = driver.execute_script("return navigator.userAgent;")
         
         print("🍪 Fresh Cookies Successfully Grabbed!")
-        driver.quit() # সার্ভার ক্র্যাশ ঠেকানোর জন্য ব্রাউজার ক্লোজ করে দেওয়া হলো!
+        driver.quit() 
         return cookie_str, user_agent
         
     except Exception as e:
@@ -142,13 +145,12 @@ def get_fresh_cookies():
         return None, None
 
 # ==========================================
-# 📡 STEP 2: 24/7 FAST SCRAPING (LIKE BEFORE)
+# 📡 STEP 2: 24/7 FAST SCRAPING (HYBRID)
 # ==========================================
 def monitor_ranges():
     global is_first_run
     
     while True:
-        # নতুন কুকি নিয়ে আসা
         cookie_str, user_agent = get_fresh_cookies()
         
         if not cookie_str:
@@ -168,7 +170,6 @@ def monitor_ranges():
         
         error_count = 0
         
-        # এই লুপটি আপনার আগের প্রিয় লুপের মতো একটানা চলতে থাকবে
         while error_count < 5:
             try:
                 response = scraper.get(API_URL, headers=headers, timeout=15)
@@ -191,7 +192,6 @@ def monitor_ranges():
                         if msg_id and msg_id not in seen_messages:
                             service = sms.get('originator', 'Unknown').upper()
                             
-                            # Filter
                             if not any(allowed in service for allowed in ALLOWED_SERVICES):
                                 seen_messages.add(msg_id)
                                 continue 
@@ -233,11 +233,11 @@ def monitor_ranges():
                             except Exception as e:
                                 print(f"❌ Telegram Error: {e}")
                                 
-                    error_count = 0 # ডাটা ঠিকঠাক এলে এরর কাউন্ট জিরো হয়ে যাবে
+                    error_count = 0 
                     
                 elif response.status_code in [401, 403]:
                     print(f"🚨 Session Expired (Code {response.status_code}). Restarting auto-login...")
-                    break # এই লুপটি ভেঙে গেলে বট আবার নতুন করে ব্রাউজার ওপেন করবে
+                    break 
                 else:
                     error_count += 1
                         
