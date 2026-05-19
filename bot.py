@@ -4,6 +4,7 @@ import json
 import re
 import threading
 import html
+import urllib.parse
 import telebot
 import cloudscraper
 from seleniumbase import Driver
@@ -64,7 +65,6 @@ def set_bot_username(message):
                 bot.reply_to(message, f"✅ <b>Bot Link Updated:</b> @{USER_BOT_USERNAME}", parse_mode="HTML")
     except: pass
 
-# ⚠️ Super Smart Detection (AI Country Fallback)
 def get_country_and_exact_range(number, range_text):
     num_str = "".join(filter(str.isdigit, str(number)))
     while num_str.startswith('0'): num_str = num_str[1:]
@@ -87,7 +87,6 @@ def get_country_and_exact_range(number, range_text):
             country_info = f"{' '.join(letters_only).title()} 🏳️"
     return country_info, exact_range
 
-# ⚠️ Python Syntax FIXED here
 def get_clean_service(text):
     if not text: return "Unknown"
     text = re.split(r'<script|function|\$\(', str(text), flags=re.IGNORECASE)[0]
@@ -101,7 +100,7 @@ def get_clean_message(text):
     return html.unescape(text).replace('<', '').replace('>', '').replace('\n', ' ').strip()
 
 # ==========================================
-# 🌐 STEP 1: AUTO-LOGIN & STEAL COOKIE
+# 🌐 STEP 1: AUTO-LOGIN & STEAL COOKIE & XSRF
 # ==========================================
 def get_fresh_cookies():
     print("🚀 Launching invisible Browser to get fresh Cookies...")
@@ -129,20 +128,28 @@ def get_fresh_cookies():
         print("✅ Login Clicked! Waiting for dashboard to set cookies...")
         time.sleep(15) 
         
-        # ⚠️ কুকি চুরি করা হচ্ছে
+        # ⚠️ কুকি এবং XSRF টোকেন চুরি করা হচ্ছে
         cookies = driver.get_cookies()
         cookie_str = "; ".join([f"{c['name']}={c['value']}" for c in cookies])
+        
+        # ম্যাজিক ট্রিক: Laravel এর X-XSRF-TOKEN বের করা
+        xsrf_token = ""
+        for c in cookies:
+            if c['name'] == 'XSRF-TOKEN':
+                xsrf_token = urllib.parse.unquote(c['value']) # URL Decode করা হলো
+                break
+                
         user_agent = driver.execute_script("return navigator.userAgent;")
         
-        print("🍪 Fresh Cookies Successfully Grabbed!")
+        print("🍪 Fresh Cookies & XSRF Token Successfully Grabbed!")
         driver.quit() 
-        return cookie_str, user_agent
+        return cookie_str, user_agent, xsrf_token
         
     except Exception as e:
         print(f"❌ Failed to grab cookies: {e}")
         try: driver.quit()
         except: pass
-        return None, None
+        return None, None, None
 
 # ==========================================
 # 📡 STEP 2: 24/7 FAST SCRAPING (HYBRID)
@@ -151,20 +158,23 @@ def monitor_ranges():
     global is_first_run
     
     while True:
-        cookie_str, user_agent = get_fresh_cookies()
+        cookie_str, user_agent, xsrf_token = get_fresh_cookies()
         
         if not cookie_str:
             print("🔄 Auto-Login failed. Retrying in 30 seconds...")
             time.sleep(30)
             continue
             
-        print("⚡ Handing over cookies to Cloudscraper for 24/7 fast scanning...")
+        print("⚡ Handing over cookies & tokens to Cloudscraper for 24/7 fast scanning...")
         scraper = cloudscraper.create_scraper()
+        
+        # ⚠️ 401 Error Fix: X-XSRF-TOKEN Header যুক্ত করা হয়েছে
         headers = {
             "Cookie": cookie_str,
             "User-Agent": user_agent,
             "Accept": "application/json, text/javascript, */*; q=0.01",
             "X-Requested-With": "XMLHttpRequest", 
+            "X-XSRF-TOKEN": xsrf_token, # <- The Magic Fix for 401 Error
             "Referer": "https://www.ivasms.com/portal/sms/test/sms"
         }
         
@@ -235,7 +245,7 @@ def monitor_ranges():
                                 
                     error_count = 0 
                     
-                elif response.status_code in [401, 403]:
+                elif response.status_code in [401, 403, 419]:
                     print(f"🚨 Session Expired (Code {response.status_code}). Restarting auto-login...")
                     break 
                 else:
