@@ -1,0 +1,35 @@
+name: 24/7 Selenium OTP Bot
+
+on:
+  schedule:
+    - cron: '0 */5 * * *' # প্রতি ৫ ঘণ্টা পরপর রিস্টার্ট হবে
+  workflow_dispatch:
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install Chrome
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y google-chrome-stable xvfb
+
+    - name: Install Requirements
+      run: pip install -r requirements.txt
+
+    - name: Run Selenium Bot
+      env:
+        BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        EMAIL: ${{ secrets.EMAIL }}
+        PASSWORD: ${{ secrets.PASSWORD }}
+      run: |
+        xvfb-run --auto-servernum timeout 290m python bot.py || true
