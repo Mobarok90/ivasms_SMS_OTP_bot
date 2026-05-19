@@ -7,6 +7,8 @@ import html
 import telebot
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 # ==========================================
 # ⚙️ ADVANCED CONFIGURATION (From Secrets)
@@ -120,34 +122,38 @@ def monitor_ranges():
     options = uc.ChromeOptions()
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--window-size=1920,1080') # Added for better stealth
+    options.add_argument('--disable-blink-features=AutomationControlled') # Anti-bot measure
     
-    # ব্রাউজার স্টার্ট করা
     driver = uc.Chrome(options=options)
     
     try:
-        print("🔐 Logging into iVASMS...")
+        print("🔐 Navigating to iVASMS login page...")
         driver.get("https://www.ivasms.com/login")
-        time.sleep(7) # ক্লাউডফ্লেয়ার ক্যাপচা অটো-সলভ হওয়ার জন্য অপেক্ষা
         
-        # ইমেইল এবং পাসওয়ার্ড বসানো
-        driver.find_element(By.NAME, "email").send_keys(EMAIL)
+        # ⚠️ SMART WAIT: Cloudflare চেক শেষ হওয়ার জন্য সর্বোচ্চ ৪০ সেকেন্ড অপেক্ষা করবে
+        print("⏳ Waiting for Cloudflare verification to complete...")
+        email_field = WebDriverWait(driver, 40).until(
+            EC.presence_of_element_located((By.NAME, "email"))
+        )
+        
+        print("✅ Cloudflare bypassed! Entering credentials...")
+        email_field.send_keys(EMAIL)
         driver.find_element(By.NAME, "password").send_keys(PASSWORD)
         time.sleep(1)
         
-        # লগইন বাটনে ক্লিক করা
         driver.find_element(By.CSS_SELECTOR, 'button[type="submit"]').click()
         print("✅ Login Clicked! Waiting for dashboard...")
-        time.sleep(10) # লগইন কমপ্লিট হওয়ার জন্য অপেক্ষা
         
+        # লগইন হওয়ার পর ড্যাশবোর্ড লোড হতে সময় দেওয়া
+        time.sleep(10) 
         print("📡 Starting 24/7 API Monitoring...")
         
         while True:
             try:
-                # ডাইরেক্ট API লিঙ্কে হিট করা (যেহেতু লগইন করা আছে, ডাটা চলে আসবে)
                 driver.get(API_URL)
-                time.sleep(2)
+                time.sleep(3) # API response এর জন্য অপেক্ষা
                 
-                # পেজ থেকে JSON ডাটা পড়া
                 page_text = driver.find_element(By.TAG_NAME, "body").text
                 json_data = json.loads(page_text)
                 sms_list = json_data.get('data', [])
@@ -208,7 +214,7 @@ def monitor_ranges():
             except Exception as e:
                 print(f"⚠️ Loop Error (Retrying...): {e}")
                 
-            time.sleep(10) # প্রতি ১০ সেকেন্ড পরপর স্ক্যান করবে (সার্ভার সেফটির জন্য)
+            time.sleep(10) # 10 সেকেন্ড পরপর চেক করবে
 
     except Exception as e:
         print(f"🔥 Critical Browser Error: {e}")
