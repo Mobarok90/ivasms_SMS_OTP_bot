@@ -5,10 +5,7 @@ import re
 import threading
 import html
 import telebot
-import undetected_chromedriver as uc
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+from seleniumbase import Driver
 
 # ==========================================
 # ⚙️ ADVANCED CONFIGURATION (From Secrets)
@@ -33,7 +30,7 @@ SERVICE_LOGOS = {
 ALLOWED_SERVICES = list(SERVICE_LOGOS.keys())
 
 # ==========================================
-# 🌍 MASSIVE COUNTRY DICTIONARY (230+ Countries)
+# 🌍 MASSIVE COUNTRY DICTIONARY
 # ==========================================
 COUNTRY_DICT = {
     "1": ("USA/Canada", "🇺🇸/🇨🇦"), "7": ("Russia/KZ", "🇷🇺/🇰🇿"), "20": ("Egypt", "🇪🇬"), 
@@ -112,49 +109,47 @@ def get_clean_message(text):
     return re.sub(r'\s+', ' ', text).replace('<', '').replace('>', '').strip()
 
 # ==========================================
-# 🌐 SELENIUM AUTO-LOGIN & SCRAPER
+# 🌐 SELENIUMBASE AUTO-LOGIN & SCRAPER
 # ==========================================
 
 def monitor_ranges():
     global is_first_run
     
-    print("🚀 Booting up invisible Chrome Browser...")
-    options = uc.ChromeOptions()
-    options.add_argument('--no-sandbox')
-    options.add_argument('--disable-dev-shm-usage')
-    options.add_argument('--window-size=1920,1080') # Added for better stealth
-    options.add_argument('--disable-blink-features=AutomationControlled') # Anti-bot measure
-    
-    driver = uc.Chrome(options=options)
+    print("🚀 Booting up invisible Chrome Browser (SeleniumBase UC Mode)...")
     
     try:
-        print("🔐 Navigating to iVASMS login page...")
-        driver.get("https://www.ivasms.com/login")
+        # SeleniumBase UC (Undetected) Mode
+        driver = Driver(uc=True, headless=False)
         
-        # ⚠️ SMART WAIT: Cloudflare চেক শেষ হওয়ার জন্য সর্বোচ্চ ৪০ সেকেন্ড অপেক্ষা করবে
-        print("⏳ Waiting for Cloudflare verification to complete...")
-        email_field = WebDriverWait(driver, 40).until(
-            EC.presence_of_element_located((By.NAME, "email"))
-        )
+        print("🔐 Navigating to iVASMS login page...")
+        driver.uc_open_with_reconnect("https://www.ivasms.com/login", 5)
+        
+        print("⏳ Bypassing Cloudflare Turnstile...")
+        try:
+            # AI Auto-Clicker for Cloudflare Captcha
+            driver.uc_gui_click_captcha()
+        except Exception:
+            pass # If it auto-passes, ignore error
+            
+        print("⏳ Waiting for Email Field...")
+        driver.wait_for_element('input[name="email"]', timeout=40)
         
         print("✅ Cloudflare bypassed! Entering credentials...")
-        email_field.send_keys(EMAIL)
-        driver.find_element(By.NAME, "password").send_keys(PASSWORD)
-        time.sleep(1)
+        driver.type('input[name="email"]', EMAIL)
+        driver.type('input[name="password"]', PASSWORD)
+        driver.click('button[type="submit"]')
         
-        driver.find_element(By.CSS_SELECTOR, 'button[type="submit"]').click()
         print("✅ Login Clicked! Waiting for dashboard...")
-        
-        # লগইন হওয়ার পর ড্যাশবোর্ড লোড হতে সময় দেওয়া
         time.sleep(10) 
-        print("📡 Starting 24/7 API Monitoring...")
         
+        print("📡 Starting 24/7 API Monitoring...")
         while True:
             try:
                 driver.get(API_URL)
-                time.sleep(3) # API response এর জন্য অপেক্ষা
+                time.sleep(3) 
                 
-                page_text = driver.find_element(By.TAG_NAME, "body").text
+                # Fetching data using SeleniumBase
+                page_text = driver.get_text("body")
                 json_data = json.loads(page_text)
                 sms_list = json_data.get('data', [])
                 
@@ -214,11 +209,14 @@ def monitor_ranges():
             except Exception as e:
                 print(f"⚠️ Loop Error (Retrying...): {e}")
                 
-            time.sleep(10) # 10 সেকেন্ড পরপর চেক করবে
+            time.sleep(10)
 
     except Exception as e:
         print(f"🔥 Critical Browser Error: {e}")
-        driver.quit()
+        try:
+            driver.quit()
+        except:
+            pass
 
 if __name__ == "__main__":
     print("🤖 Master Bot is turning on...")
