@@ -32,10 +32,10 @@ SERVICE_LOGOS = {
 ALLOWED_SERVICES = list(SERVICE_LOGOS.keys())
 
 # ==========================================
-# 🌍 MASSIVE COUNTRY DICTIONARY (230+ Countries)
+# 🌍 MASSIVE COUNTRY DICTIONARY (Updated)
 # ==========================================
 COUNTRY_DICT = {
-    "1": ("USA/Canada", "🇺🇸/🇨🇦"), "7": ("Russia/KZ", "🇷🇺/🇰🇿"), "20": ("Egypt", "🇪🇬"), 
+    "1": ("USA/Canada", "🇺🇸/🇨🇦"), "7": ("Russia", "🇷🇺"), "20": ("Egypt", "🇪🇬"), 
     "27": ("South Africa", "🇿🇦"), "30": ("Greece", "🇬🇷"), "31": ("Netherlands", "🇳🇱"), 
     "32": ("Belgium", "🇧🇪"), "33": ("France", "🇫🇷"), "34": ("Spain", "🇪🇸"), 
     "39": ("Italy", "🇮🇹"), "44": ("UK", "🇬🇧"), "49": ("Germany", "🇩🇪"), 
@@ -44,10 +44,11 @@ COUNTRY_DICT = {
     "62": ("Indonesia", "🇮🇩"), "63": ("Philippines", "🇵🇭"), "66": ("Thailand", "🇹🇭"), 
     "81": ("Japan", "🇯🇵"), "82": ("South Korea", "🇰🇷"), "84": ("Vietnam", "🇻🇳"), 
     "86": ("China", "🇨🇳"), "90": ("Turkey", "🇹🇷"), "91": ("India", "🇮🇳"), 
-    "92": ("Pakistan", "🇵🇰"), "98": ("Iran", "🇮🇷"), "212": ("Morocco", "🇲🇦"), 
-    "234": ("Nigeria", "🇳🇬"), "254": ("Kenya", "🇰🇪"), "351": ("Portugal", "🇵🇹"), 
+    "92": ("Pakistan", "🇵🇰"), "93": ("Afghanistan", "🇦🇫"), "98": ("Iran", "🇮🇷"), 
+    "212": ("Morocco", "🇲🇦"), "234": ("Nigeria", "🇳🇬"), "249": ("Sudan", "🇸🇩"), 
+    "251": ("Ethiopia", "🇪🇹"), "254": ("Kenya", "🇰🇪"), "351": ("Portugal", "🇵🇹"), 
     "380": ("Ukraine", "🇺🇦"), "880": ("Bangladesh", "🇧🇩"), "966": ("Saudi Arabia", "🇸🇦"), 
-    "971": ("UAE", "🇦🇪"), "998": ("Uzbekistan", "🇺🇿"), "249": ("Sudan", "🇸🇩")
+    "971": ("UAE", "🇦🇪"), "998": ("Uzbekistan", "🇺🇿")
 }
 
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -90,14 +91,13 @@ def get_country_and_exact_range(number, range_text):
             country_info = f"{' '.join(letters_only).title()} 🏳️"
     return country_info, exact_range
 
-# ⚠️ টেলিগ্রামের জন্য ১০০% সেফ ফিল্টার
 def safe_text(text):
     if not text: return "Unknown"
     text = str(text)
     text = re.split(r'<script|function|\$\(', text, flags=re.IGNORECASE)[0]
-    text = re.sub(r'<[^>]+>', ' ', text) # Remove HTML tags
-    text = html.unescape(text) # Unescape &amp; etc.
-    text = text.replace('<', ' ').replace('>', ' ').replace('&', 'and') # No brackets allowed!
+    text = re.sub(r'<[^>]+>', ' ', text)
+    text = html.unescape(text)
+    text = text.replace('<', ' ').replace('>', ' ').replace('&', 'and')
     return re.sub(r'\s+', ' ', text).strip()
 
 # ==========================================
@@ -191,7 +191,7 @@ def monitor_ranges():
             time.sleep(30)
             continue
             
-        print("⚡ Handing over cookies & tokens to Cloudscraper for 24/7 fast scanning...")
+        print("⚡ Handing over cookies to Cloudscraper for 24/7 fast scanning...")
         scraper = cloudscraper.create_scraper()
         scraper.cookies.update(cookie_dict)
         
@@ -226,7 +226,6 @@ def monitor_ranges():
                         msg_id = str(sms.get('id', ''))
                         
                         if msg_id and msg_id not in seen_messages:
-                            # ⚠️ SAFE TEXT EXTRACTION
                             service_raw = safe_text(sms.get('originator', 'Unknown')).upper()
                             
                             if not any(allowed in service_raw for allowed in ALLOWED_SERVICES):
@@ -263,12 +262,20 @@ def monitor_ranges():
                             btn_bot = telebot.types.InlineKeyboardButton("🤖 BOTLINK", url=f"https://t.me/{USER_BOT_USERNAME}")
                             markup.row(btn_copy, btn_bot)
                             
+                            # ⚠️ Anti-Flood System (Error 429 Fix)
                             try:
                                 bot.send_message(GROUP_ID, msg_body, parse_mode="HTML", reply_markup=markup)
                                 seen_messages.add(msg_id)
                                 print(f"✅ OTP Arrived >> {service_raw} | Range: {exact_range}")
+                                time.sleep(3.5) # ⚠️ স্প্যাম ঠেকানোর জন্য ৩.৫ সেকেন্ড গ্যাপ
                             except Exception as e:
-                                print(f"❌ Telegram Error: {e}")
+                                if "Too Many Requests" in str(e):
+                                    retry_match = re.search(r'retry after (\d+)', str(e))
+                                    wait_time = int(retry_match.group(1)) if retry_match else 10
+                                    print(f"⏳ Telegram Anti-Spam (429)! Pausing for {wait_time} seconds...")
+                                    time.sleep(wait_time + 1)
+                                else:
+                                    print(f"❌ Telegram Error: {e}")
                                 
                     error_count = 0 
                     
