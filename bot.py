@@ -51,6 +51,12 @@ COUNTRY_DICT = {
 }
 
 bot = telebot.TeleBot(BOT_TOKEN)
+# ⚠️ 409 Conflict এড়ানোর জন্য পুরোনো কানেকশন ক্লিয়ার করা হলো
+try:
+    bot.remove_webhook()
+except:
+    pass
+
 seen_messages = set()
 is_first_run = True
 
@@ -65,6 +71,7 @@ def set_bot_username(message):
                 bot.reply_to(message, f"✅ <b>Bot Link Updated:</b> @{USER_BOT_USERNAME}", parse_mode="HTML")
     except: pass
 
+# ⚠️ Super Smart Detection (AI Country Fallback)
 def get_country_and_exact_range(number, range_text):
     num_str = "".join(filter(str.isdigit, str(number)))
     while num_str.startswith('0'): num_str = num_str[1:]
@@ -104,6 +111,7 @@ def get_clean_message(text):
 # ==========================================
 def get_fresh_cookies():
     print("🚀 Launching invisible Browser to get fresh Cookies...")
+    driver = None
     try:
         driver = Driver(uc=True, headless=False)
         driver.set_page_load_timeout(45)
@@ -125,30 +133,42 @@ def get_fresh_cookies():
         driver.type('input[name="password"]', PASSWORD)
         driver.click('button[type="submit"]')
         
-        print("✅ Login Clicked! Waiting for dashboard to set cookies...")
-        time.sleep(15) 
+        print("⏳ Login Clicked! Waiting to reach the dashboard...")
         
-        # ⚠️ কুকি এবং XSRF টোকেন চুরি করা হচ্ছে
+        # ⚠️ SMART FIX: ড্যাশবোর্ডে না ঢোকা পর্যন্ত অপেক্ষা করবে (কুকি ভুল হবে না)
+        timeout_counter = 30
+        while "login" in driver.current_url and timeout_counter > 0:
+            time.sleep(1)
+            timeout_counter -= 1
+            
+        if "login" in driver.current_url:
+            print("❌ Still on login page! Check Email/Password or CF blocked it.")
+            driver.quit()
+            return None, None, None
+            
+        print("✅ Dashboard Reached! Letting cookies settle for 5 seconds...")
+        time.sleep(5) 
+        
+        # কুকি এবং XSRF টোকেন চুরি করা হচ্ছে
         cookies = driver.get_cookies()
-        cookie_str = "; ".join([f"{c['name']}={c['value']}" for c in cookies])
-        
-        # ম্যাজিক ট্রিক: Laravel এর X-XSRF-TOKEN বের করা
-        xsrf_token = ""
-        for c in cookies:
-            if c['name'] == 'XSRF-TOKEN':
-                xsrf_token = urllib.parse.unquote(c['value']) # URL Decode করা হলো
-                break
-                
         user_agent = driver.execute_script("return navigator.userAgent;")
         
-        print("🍪 Fresh Cookies & XSRF Token Successfully Grabbed!")
+        cookie_dict = {}
+        xsrf_token = ""
+        for c in cookies:
+            cookie_dict[c['name']] = c['value']
+            if c['name'] == 'XSRF-TOKEN':
+                xsrf_token = urllib.parse.unquote(c['value'])
+        
+        print("🍪 Fresh Authenticated Cookies & XSRF Token Successfully Grabbed!")
         driver.quit() 
-        return cookie_str, user_agent, xsrf_token
+        return cookie_dict, user_agent, xsrf_token
         
     except Exception as e:
         print(f"❌ Failed to grab cookies: {e}")
-        try: driver.quit()
-        except: pass
+        if driver:
+            try: driver.quit()
+            except: pass
         return None, None, None
 
 # ==========================================
@@ -158,9 +178,9 @@ def monitor_ranges():
     global is_first_run
     
     while True:
-        cookie_str, user_agent, xsrf_token = get_fresh_cookies()
+        cookie_dict, user_agent, xsrf_token = get_fresh_cookies()
         
-        if not cookie_str:
+        if not cookie_dict:
             print("🔄 Auto-Login failed. Retrying in 30 seconds...")
             time.sleep(30)
             continue
@@ -168,13 +188,15 @@ def monitor_ranges():
         print("⚡ Handing over cookies & tokens to Cloudscraper for 24/7 fast scanning...")
         scraper = cloudscraper.create_scraper()
         
-        # ⚠️ 401 Error Fix: X-XSRF-TOKEN Header যুক্ত করা হয়েছে
+        # ⚠️ কুকি ডাইরেক্ট ইমপোর্ট করা হলো (100% Safe)
+        scraper.cookies.update(cookie_dict)
+        
         headers = {
-            "Cookie": cookie_str,
             "User-Agent": user_agent,
             "Accept": "application/json, text/javascript, */*; q=0.01",
             "X-Requested-With": "XMLHttpRequest", 
-            "X-XSRF-TOKEN": xsrf_token, # <- The Magic Fix for 401 Error
+            "X-XSRF-TOKEN": xsrf_token,
+            "Origin": "https://www.ivasms.com",
             "Referer": "https://www.ivasms.com/portal/sms/test/sms"
         }
         
@@ -265,6 +287,7 @@ if __name__ == "__main__":
     
     while True:
         try:
-            bot.infinity_polling(timeout=20, long_polling_timeout=10)
+            # skip_pending=True দেওয়ায় পুরনো মেসেজ কনফ্লিক্ট করবে না
+            bot.infinity_polling(timeout=20, long_polling_timeout=10, skip_pending=True)
         except Exception as e:
             time.sleep(3)
