@@ -51,11 +51,8 @@ COUNTRY_DICT = {
 }
 
 bot = telebot.TeleBot(BOT_TOKEN)
-# ⚠️ 409 Conflict এড়ানোর জন্য পুরোনো কানেকশন ক্লিয়ার করা হলো
-try:
-    bot.remove_webhook()
-except:
-    pass
+try: bot.remove_webhook()
+except: pass
 
 seen_messages = set()
 is_first_run = True
@@ -71,7 +68,6 @@ def set_bot_username(message):
                 bot.reply_to(message, f"✅ <b>Bot Link Updated:</b> @{USER_BOT_USERNAME}", parse_mode="HTML")
     except: pass
 
-# ⚠️ Super Smart Detection (AI Country Fallback)
 def get_country_and_exact_range(number, range_text):
     num_str = "".join(filter(str.isdigit, str(number)))
     while num_str.startswith('0'): num_str = num_str[1:]
@@ -120,9 +116,10 @@ def get_fresh_cookies():
         try: driver.get("https://www.ivasms.com/login")
         except: pass
         
+        # Initial CF Check
         try:
             driver.uc_gui_click_captcha()
-            time.sleep(2)
+            time.sleep(3)
         except: pass
         
         print("⏳ Waiting for Email Field...")
@@ -131,25 +128,48 @@ def get_fresh_cookies():
         print("✅ CF bypassed! Entering credentials...")
         driver.type('input[name="email"]', EMAIL)
         driver.type('input[name="password"]', PASSWORD)
-        driver.click('button[type="submit"]')
         
-        print("⏳ Login Clicked! Waiting to reach the dashboard...")
+        # ⚠️ NEW AI LOGIC: Waiting for Turnstile on the Login Form
+        print("⏳ Waiting 7 seconds for embedded Turnstile Captcha to auto-resolve...")
+        time.sleep(7)
         
-        # ⚠️ SMART FIX: ড্যাশবোর্ডে না ঢোকা পর্যন্ত অপেক্ষা করবে (কুকি ভুল হবে না)
+        print("🤖 Attempting to click Turnstile just in case...")
+        try:
+            driver.uc_gui_click_captcha()
+            time.sleep(3)
+        except: pass
+        
+        print("🖱️ Clicking Login Submit Button...")
+        try:
+            driver.uc_click('button[type="submit"]')
+        except:
+            driver.click('button[type="submit"]')
+            
+        print("⏳ Waiting to reach the dashboard...")
+        
         timeout_counter = 30
         while "login" in driver.current_url and timeout_counter > 0:
             time.sleep(1)
             timeout_counter -= 1
             
         if "login" in driver.current_url:
-            print("❌ Still on login page! Check Email/Password or CF blocked it.")
+            print("❌ Still on login page! Checking for exactly WHY it failed...")
+            page_text = driver.get_text("body").lower()
+            
+            # Error Analysis
+            if "credentials do not match" in page_text or "invalid" in page_text or "wrong" in page_text:
+                print("🚨 CRITICAL ERROR: Incorrect Email or Password! Please check your GitHub Secrets carefully (make sure there are no blank spaces).")
+            elif "captcha" in page_text or "turnstile" in page_text or "verification" in page_text:
+                print("🚨 CAPTCHA ERROR: Cloudflare Turnstile rejected the login. Retrying on next loop...")
+            else:
+                print(f"⚠️ PAGE ERROR SNIPPET: {page_text[:200]}")
+                
             driver.quit()
             return None, None, None
             
         print("✅ Dashboard Reached! Letting cookies settle for 5 seconds...")
         time.sleep(5) 
         
-        # কুকি এবং XSRF টোকেন চুরি করা হচ্ছে
         cookies = driver.get_cookies()
         user_agent = driver.execute_script("return navigator.userAgent;")
         
@@ -187,8 +207,6 @@ def monitor_ranges():
             
         print("⚡ Handing over cookies & tokens to Cloudscraper for 24/7 fast scanning...")
         scraper = cloudscraper.create_scraper()
-        
-        # ⚠️ কুকি ডাইরেক্ট ইমপোর্ট করা হলো (100% Safe)
         scraper.cookies.update(cookie_dict)
         
         headers = {
@@ -287,7 +305,6 @@ if __name__ == "__main__":
     
     while True:
         try:
-            # skip_pending=True দেওয়ায় পুরনো মেসেজ কনফ্লিক্ট করবে না
             bot.infinity_polling(timeout=20, long_polling_timeout=10, skip_pending=True)
         except Exception as e:
             time.sleep(3)
