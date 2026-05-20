@@ -90,17 +90,15 @@ def get_country_and_exact_range(number, range_text):
             country_info = f"{' '.join(letters_only).title()} 🏳️"
     return country_info, exact_range
 
-def get_clean_service(text):
+# ⚠️ টেলিগ্রামের জন্য ১০০% সেফ ফিল্টার
+def safe_text(text):
     if not text: return "Unknown"
-    text = re.split(r'<script|function|\$\(', str(text), flags=re.IGNORECASE)[0]
-    text = re.sub(r'<[^>]+>', '', text)
-    return re.sub(r'[^a-zA-Z0-9\s\-]', '', text).strip().upper()
-
-def get_clean_message(text):
-    if not text: return "No Text"
-    text = re.split(r'function', str(text), flags=re.IGNORECASE)[0]
-    text = re.sub(r'<[^>]+>', ' ', text)
-    return html.unescape(text).replace('<', '').replace('>', '').replace('\n', ' ').strip()
+    text = str(text)
+    text = re.split(r'<script|function|\$\(', text, flags=re.IGNORECASE)[0]
+    text = re.sub(r'<[^>]+>', ' ', text) # Remove HTML tags
+    text = html.unescape(text) # Unescape &amp; etc.
+    text = text.replace('<', ' ').replace('>', ' ').replace('&', 'and') # No brackets allowed!
+    return re.sub(r'\s+', ' ', text).strip()
 
 # ==========================================
 # 🌐 STEP 1: AUTO-LOGIN & STEAL COOKIE & XSRF
@@ -116,10 +114,9 @@ def get_fresh_cookies():
         try: driver.get("https://www.ivasms.com/login")
         except: pass
         
-        # Initial CF Check
         try:
             driver.uc_gui_click_captcha()
-            time.sleep(3)
+            time.sleep(2)
         except: pass
         
         print("⏳ Waiting for Email Field...")
@@ -129,7 +126,6 @@ def get_fresh_cookies():
         driver.type('input[name="email"]', EMAIL)
         driver.type('input[name="password"]', PASSWORD)
         
-        # ⚠️ NEW AI LOGIC: Waiting for Turnstile on the Login Form
         print("⏳ Waiting 7 seconds for embedded Turnstile Captcha to auto-resolve...")
         time.sleep(7)
         
@@ -153,17 +149,7 @@ def get_fresh_cookies():
             timeout_counter -= 1
             
         if "login" in driver.current_url:
-            print("❌ Still on login page! Checking for exactly WHY it failed...")
-            page_text = driver.get_text("body").lower()
-            
-            # Error Analysis
-            if "credentials do not match" in page_text or "invalid" in page_text or "wrong" in page_text:
-                print("🚨 CRITICAL ERROR: Incorrect Email or Password! Please check your GitHub Secrets carefully (make sure there are no blank spaces).")
-            elif "captcha" in page_text or "turnstile" in page_text or "verification" in page_text:
-                print("🚨 CAPTCHA ERROR: Cloudflare Turnstile rejected the login. Retrying on next loop...")
-            else:
-                print(f"⚠️ PAGE ERROR SNIPPET: {page_text[:200]}")
-                
+            print("❌ Still on login page! Check Email/Password or CF blocked it.")
             driver.quit()
             return None, None, None
             
@@ -240,19 +226,20 @@ def monitor_ranges():
                         msg_id = str(sms.get('id', ''))
                         
                         if msg_id and msg_id not in seen_messages:
-                            service = sms.get('originator', 'Unknown').upper()
+                            # ⚠️ SAFE TEXT EXTRACTION
+                            service_raw = safe_text(sms.get('originator', 'Unknown')).upper()
                             
-                            if not any(allowed in service for allowed in ALLOWED_SERVICES):
+                            if not any(allowed in service_raw for allowed in ALLOWED_SERVICES):
                                 seen_messages.add(msg_id)
                                 continue 
                             
                             term_data = sms.get('termination', {})
                             raw_number = str(term_data.get('test_number', sms.get('test_number', 'Unknown')))
-                            range_count_text = str(sms.get('range', 'Active')) 
                             
+                            range_count_text = safe_text(sms.get('range', 'Active')) 
                             country_info, exact_range = get_country_and_exact_range(raw_number, range_count_text)
-                            service_display = SERVICE_LOGOS.get(service, f"🌐 {service}")
-                            full_text = get_clean_message(sms.get('messagedata', 'No Text'))
+                            service_display = SERVICE_LOGOS.get(service_raw, f"🌐 {service_raw}")
+                            full_text = safe_text(sms.get('messagedata', 'No Text'))
 
                             msg_body = (
                                 f"✅ <b>ACTIVE NEW RANGE</b>\n"
@@ -279,7 +266,7 @@ def monitor_ranges():
                             try:
                                 bot.send_message(GROUP_ID, msg_body, parse_mode="HTML", reply_markup=markup)
                                 seen_messages.add(msg_id)
-                                print(f"✅ OTP Arrived >> {service} | Range: {exact_range}")
+                                print(f"✅ OTP Arrived >> {service_raw} | Range: {exact_range}")
                             except Exception as e:
                                 print(f"❌ Telegram Error: {e}")
                                 
