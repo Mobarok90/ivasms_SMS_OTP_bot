@@ -30,9 +30,10 @@ SERVICE_LOGOS = {
     "TIKTOK": "🎵 TikTok", "GOOGLE": "🔴 Google"
 }
 ALLOWED_SERVICES = list(SERVICE_LOGOS.keys())
+BLOCKED_SERVICES = ["TIKTOKADS"] # TikTokAds ব্লক করা হলো
 
 # ==========================================
-# 🌍 SUPER MASSIVE COUNTRY DICTIONARY (250+ Countries)
+# 🌍 COMPLETE COUNTRY DICTIONARY (All Nations)
 # ==========================================
 COUNTRY_DICT = {
     "1": ("USA/Canada", "🇺🇸/🇨🇦"), "7": ("Russia", "🇷🇺"), "20": ("Egypt", "🇪🇬"), 
@@ -105,6 +106,12 @@ except: pass
 seen_messages = set()
 is_first_run = True
 
+# 🧠 SMART AI MEMORY (For High Active Ranges)
+range_activity_tracker = {}
+TIME_WINDOW = 900 # ১৫ মিনিট (১৫ * ৬০ সেকেন্ড) এর মেমরি
+MIN_OTP_THRESHOLD = 3 # অন্তত ৩টি ওটিপি আসলে তবেই গ্রুপে দেবে
+HIGH_ACTIVE_THRESHOLD = 5 # ৫টি বা তার বেশি আসলে "HIGHLY ACTIVE" ট্যাগ দেবে
+
 @bot.message_handler(commands=['setbot'])
 def set_bot_username(message):
     global USER_BOT_USERNAME
@@ -123,7 +130,6 @@ def get_country_and_exact_range(number, range_text):
     country_info = "Unknown Country 🌐"
     
     matched = False
-    # Check prefixes from 4 digits down to 1
     for length in [4, 3, 2, 1]:  
         if len(exact_range) >= length:
             prefix = exact_range[:length]
@@ -133,13 +139,19 @@ def get_country_and_exact_range(number, range_text):
                 matched = True
                 break
                 
-    # ⚠️ AI Fallback (If still not matched, extract from 'Range Qty' text)
     if not matched and range_text:
         letters_only = re.findall(r'[A-Za-z]+', str(range_text))
         if letters_only:
-            country_info = f"{' '.join(letters_only).title()} 🏳️"
-            
+            country_name = ' '.join(letters_only).title()
+            if country_name.lower() != "active": # Fallback refinement
+                country_info = f"{country_name} 🏳️"
     return country_info, exact_range
+
+def get_clean_service(text):
+    if not text: return "Unknown"
+    text = re.split(r'<script|function|\$\(', str(text), flags=re.IGNORECASE)[0]
+    text = re.sub(r'<[^>]+>', '', text)
+    return re.sub(r'[^a-zA-Z0-9\s\-]', '', text).strip().upper()
 
 def safe_text(text):
     if not text: return "Unknown"
@@ -186,13 +198,10 @@ def get_fresh_cookies():
         except: pass
         
         print("🖱️ Clicking Login Submit Button...")
-        try:
-            driver.uc_click('button[type="submit"]')
-        except:
-            driver.click('button[type="submit"]')
+        try: driver.uc_click('button[type="submit"]')
+        except: driver.click('button[type="submit"]')
             
         print("⏳ Waiting to reach the dashboard...")
-        
         timeout_counter = 30
         while "login" in driver.current_url and timeout_counter > 0:
             time.sleep(1)
@@ -228,10 +237,10 @@ def get_fresh_cookies():
         return None, None, None
 
 # ==========================================
-# 📡 STEP 2: 24/7 FAST SCRAPING (HYBRID)
+# 📡 STEP 2: 24/7 FAST SCRAPING & AI TRACKING
 # ==========================================
 def monitor_ranges():
-    global is_first_run
+    global is_first_run, range_activity_tracker
     
     while True:
         cookie_dict, user_agent, xsrf_token = get_fresh_cookies()
@@ -272,32 +281,62 @@ def monitor_ranges():
                         time.sleep(5)
                         continue
 
+                    current_time = time.time()
+
                     for sms in reversed(sms_list):
                         msg_id = str(sms.get('id', ''))
                         
                         if msg_id and msg_id not in seen_messages:
                             service_raw = safe_text(sms.get('originator', 'Unknown')).upper()
                             
-                            # ⚠️ Service Filter: Only allowed services pass
+                            # 🚫 Block unwanted services like TIKTOKADS
+                            if any(blocked in service_raw for blocked in BLOCKED_SERVICES):
+                                seen_messages.add(msg_id)
+                                continue
+
+                            # ⚠️ Ensure only Allowed Services
                             if not any(allowed in service_raw for allowed in ALLOWED_SERVICES):
                                 seen_messages.add(msg_id)
                                 continue 
                             
                             term_data = sms.get('termination', {})
                             raw_number = str(term_data.get('test_number', sms.get('test_number', 'Unknown')))
-                            
                             range_count_text = safe_text(sms.get('range', 'Active')) 
+                            
                             country_info, exact_range = get_country_and_exact_range(raw_number, range_count_text)
+                            
+                            # 🧠 15-MINUTE AI SLIDING WINDOW MEMORY 
+                            if exact_range not in range_activity_tracker:
+                                range_activity_tracker[exact_range] = []
+                            
+                            range_activity_tracker[exact_range].append(current_time)
+                            # Remove old timestamps (older than 15 minutes)
+                            range_activity_tracker[exact_range] = [t for t in range_activity_tracker[exact_range] if current_time - t <= TIME_WINDOW]
+                            
+                            recent_otp_count = len(range_activity_tracker[exact_range])
+                            
+                            # If it hasn't reached the minimum threshold (e.g., 3), ignore it silently
+                            if recent_otp_count < MIN_OTP_THRESHOLD:
+                                seen_messages.add(msg_id)
+                                print(f"👀 Monitoring Range >> {exact_range} (Hit {recent_otp_count}/{MIN_OTP_THRESHOLD} for Active)")
+                                continue
+                            
+                            # Determine Title based on Activity level
+                            if recent_otp_count >= HIGH_ACTIVE_THRESHOLD:
+                                title_header = "🔥 <b>HIGHLY ACTIVE RANGE</b> 🔥"
+                            else:
+                                title_header = "✅ <b>ACTIVE NEW RANGE</b>"
+                                
                             service_display = SERVICE_LOGOS.get(service_raw, f"🌐 {service_raw}")
                             full_text = safe_text(sms.get('messagedata', 'No Text'))
 
                             msg_body = (
-                                f"✅ <b>ACTIVE NEW RANGE</b>\n"
+                                f"{title_header}\n"
                                 f"━━━━━━━━━━━━━━━━━━━\n"
                                 f"🌍 <b>Country:</b> {country_info}\n"
                                 f"🎯 <b>Range:</b> {exact_range}\n"
                                 f"⚙️ <b>Service:</b> {service_display}\n"
-                                f"📊 <b>Range Qty:</b> {range_count_text}\n"
+                                f"📊 <b>Recent OTPs:</b> {recent_otp_count} (Last 15m)\n"
                                 f"━━━━━━━━━━━━━━━━━━━\n"
                                 f"💬 <b>SMS Code:</b>\n"
                                 f"<i>{full_text}</i>"
@@ -313,12 +352,11 @@ def monitor_ranges():
                             btn_bot = telebot.types.InlineKeyboardButton("🤖 BOTLINK", url=f"https://t.me/{USER_BOT_USERNAME}")
                             markup.row(btn_copy, btn_bot)
                             
-                            # ⚠️ Anti-Flood System (Error 429 Fix)
                             try:
                                 bot.send_message(GROUP_ID, msg_body, parse_mode="HTML", reply_markup=markup)
                                 seen_messages.add(msg_id)
-                                print(f"✅ OTP Arrived >> {service_raw} | Range: {exact_range}")
-                                time.sleep(3.5) # স্প্যাম ঠেকানোর জন্য ৩.৫ সেকেন্ড গ্যাপ
+                                print(f"✅ OTP Sent (Hits: {recent_otp_count}) >> {service_raw} | Range: {exact_range}")
+                                time.sleep(3.5) # Anti-flood delay
                             except Exception as e:
                                 if "Too Many Requests" in str(e):
                                     retry_match = re.search(r'retry after (\d+)', str(e))
@@ -345,11 +383,9 @@ def monitor_ranges():
         print("🔄 Connection lost or Session expired. Going back to Steal Cookies...")
 
 if __name__ == "__main__":
-    print("🤖 Master Hybrid Bot is turning on...")
+    print("🤖 Master Hybrid Bot is turning on with AI Active Range Tracker...")
     threading.Thread(target=monitor_ranges, daemon=True).start()
     
     while True:
         try:
-            bot.infinity_polling(timeout=20, long_polling_timeout=10, skip_pending=True)
-        except Exception as e:
-            time.sleep(3)
+    
