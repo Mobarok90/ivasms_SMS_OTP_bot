@@ -30,7 +30,7 @@ SERVICE_LOGOS = {
     "TIKTOK": "🎵 TikTok", "GOOGLE": "🔴 Google"
 }
 ALLOWED_SERVICES = list(SERVICE_LOGOS.keys())
-BLOCKED_SERVICES = ["TIKTOKADS"] # TikTokAds Blocked
+BLOCKED_SERVICES = ["TIKTOKADS"] # TikTokAds ব্লক করা হলো
 
 # ==========================================
 # 🌍 COMPLETE COUNTRY DICTIONARY (250+ Countries)
@@ -393,4 +393,19 @@ def monitor_ranges():
                     error_count += 1
                         
             except Exception as e:
-                print(f"⚠️
+                print(f"⚠️ Fetch Error: {e}")
+                error_count += 1
+                
+            time.sleep(10)
+            
+        print("🔄 Connection lost or Session expired. Going back to Steal Cookies...")
+
+if __name__ == "__main__":
+    print("🤖 Master Hybrid Bot is turning on with AI Active Range Tracker...")
+    threading.Thread(target=monitor_ranges, daemon=True).start()
+    
+    while True:
+        try:
+            bot.infinity_polling(timeout=20, long_polling_timeout=10, skip_pending=True)
+        except Exception:
+            time.sleep(3)
