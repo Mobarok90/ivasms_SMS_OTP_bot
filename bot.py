@@ -30,13 +30,13 @@ SERVICE_LOGOS = {
     "TIKTOK": "🎵 TikTok", "GOOGLE": "🔴 Google"
 }
 ALLOWED_SERVICES = list(SERVICE_LOGOS.keys())
-BLOCKED_SERVICES = ["TIKTOKADS"] # TikTokAds ব্লক করা হলো
+BLOCKED_SERVICES = ["TIKTOKADS"] 
 
 # ==========================================
-# 🌍 COMPLETE COUNTRY DICTIONARY (250+ Countries)
+# 🌍 SUPER MASSIVE COUNTRY DICTIONARY (250+ Countries)
 # ==========================================
 COUNTRY_DICT = {
-    "1": ("USA/Canada", "🇺🇸/🇨🇦"), "7": ("Russia", "🇷🇺"), "20": ("Egypt", "🇪🇬"), 
+    "1": ("USA/Canada", "🇺🇸/🇨🇦"), "7": ("Russia/KZ", "🇷🇺/🇰🇿"), "20": ("Egypt", "🇪🇬"), 
     "27": ("South Africa", "🇿🇦"), "30": ("Greece", "🇬🇷"), "31": ("Netherlands", "🇳🇱"), 
     "32": ("Belgium", "🇧🇪"), "33": ("France", "🇫🇷"), "34": ("Spain", "🇪🇸"), 
     "36": ("Hungary", "🇭🇺"), "39": ("Italy", "🇮🇹"), "40": ("Romania", "🇷🇴"), 
@@ -105,13 +105,15 @@ try:
 except Exception:
     pass
 
+# 🧠 ডাবল চেক মেমরি
 seen_messages = set()
+seen_signatures = set() 
 is_first_run = True
 
-# 🧠 SMART AI MEMORY (For High Active Ranges ONLY)
-range_activity_tracker = {}
+# 🧠 COUNTRY AI TRACKER
+country_activity_tracker = {}
 TIME_WINDOW = 900 # 15 minutes window
-HIGH_ACTIVE_THRESHOLD = 4 # ৪টি বা তার বেশি ওটিপি আসলে 'HIGHLY ACTIVE' ট্যাগ পাবে
+HIGH_ACTIVE_THRESHOLD = 4 # 4+ OTPs from the same country = HIGHLY ACTIVE
 
 @bot.message_handler(commands=['setbot'])
 def set_bot_username(message):
@@ -151,6 +153,13 @@ def get_country_and_exact_range(number, range_text):
                 
     return country_info, exact_range
 
+def get_clean_service(text):
+    if not text: 
+        return "Unknown"
+    text = re.split(r'<script|function|\$\(', str(text), flags=re.IGNORECASE)[0]
+    text = re.sub(r'<[^>]+>', '', text)
+    return re.sub(r'[^a-zA-Z0-9\s\-]', '', text).strip().upper()
+
 def safe_text(text):
     if not text: 
         return "Unknown"
@@ -172,16 +181,13 @@ def get_fresh_cookies():
         driver.set_page_load_timeout(45)
         
         print("🔐 Navigating to iVASMS login...")
-        try:
-            driver.get("https://www.ivasms.com/login")
-        except Exception:
-            pass
+        try: driver.get("https://www.ivasms.com/login")
+        except Exception: pass
         
         try:
             driver.uc_gui_click_captcha()
             time.sleep(2)
-        except Exception:
-            pass
+        except Exception: pass
         
         print("⏳ Waiting for Email Field...")
         driver.wait_for_element('input[name="email"]', timeout=30)
@@ -190,21 +196,17 @@ def get_fresh_cookies():
         driver.type('input[name="email"]', EMAIL)
         driver.type('input[name="password"]', PASSWORD)
         
-        print("⏳ Waiting 7 seconds for embedded Turnstile Captcha to auto-resolve...")
+        print("⏳ Waiting 7 seconds for Turnstile to auto-resolve...")
         time.sleep(7)
         
-        print("🤖 Attempting to click Turnstile just in case...")
         try:
             driver.uc_gui_click_captcha()
             time.sleep(3)
-        except Exception:
-            pass
+        except Exception: pass
         
         print("🖱️ Clicking Login Submit Button...")
-        try:
-            driver.uc_click('button[type="submit"]')
-        except Exception:
-            driver.click('button[type="submit"]')
+        try: driver.uc_click('button[type="submit"]')
+        except Exception: driver.click('button[type="submit"]')
             
         print("⏳ Waiting to reach the dashboard...")
         timeout_counter = 30
@@ -213,7 +215,7 @@ def get_fresh_cookies():
             timeout_counter -= 1
             
         if "login" in driver.current_url:
-            print("❌ Still on login page! Check Email/Password or CF blocked it.")
+            print("❌ Still on login page! CF blocked it.")
             driver.quit()
             return None, None, None
             
@@ -230,24 +232,22 @@ def get_fresh_cookies():
             if c['name'] == 'XSRF-TOKEN':
                 xsrf_token = urllib.parse.unquote(c['value'])
         
-        print("🍪 Fresh Authenticated Cookies & XSRF Token Successfully Grabbed!")
+        print("🍪 Fresh Authenticated Cookies Grabbed!")
         driver.quit() 
         return cookie_dict, user_agent, xsrf_token
         
     except Exception as e:
         print(f"❌ Failed to grab cookies: {e}")
         if driver:
-            try:
-                driver.quit()
-            except Exception:
-                pass
+            try: driver.quit()
+            except Exception: pass
         return None, None, None
 
 # ==========================================
 # 📡 STEP 2: 24/7 FAST SCRAPING & AI TRACKING
 # ==========================================
 def monitor_ranges():
-    global is_first_run, range_activity_tracker
+    global is_first_run, country_activity_tracker, seen_messages, seen_signatures
     
     while True:
         cookie_dict, user_agent, xsrf_token = get_fresh_cookies()
@@ -281,13 +281,17 @@ def monitor_ranges():
                     sms_list = json_data.get('data', [])
                     
                     if is_first_run:
-                        print(f"📥 Found {len(sms_list)} old ranges. Pre-loading Active Tracker silently...")
+                        print(f"📥 Found {len(sms_list)} old ranges. Pre-loading Tracker silently...")
                         for sms in sms_list:
-                            seen_messages.add(str(sms.get('id', '')))
+                            msg_id = str(sms.get('id', ''))
+                            seen_messages.add(msg_id)
+                            
                             term_data = sms.get('termination', {})
                             raw_number = str(term_data.get('test_number', sms.get('test_number', 'Unknown')))
-                            _, exact_range = get_country_and_exact_range(raw_number, "")
-                            range_activity_tracker[exact_range] = range_activity_tracker.get(exact_range, 0) + 1
+                            country_info, _ = get_country_and_exact_range(raw_number, "")
+                            
+                            country_activity_tracker[country_info] = country_activity_tracker.get(country_info, [])
+                            country_activity_tracker[country_info].append(time.time())
                             
                         is_first_run = False
                         time.sleep(5)
@@ -298,43 +302,45 @@ def monitor_ranges():
                     for sms in reversed(sms_list):
                         msg_id = str(sms.get('id', ''))
                         
-                        if msg_id and msg_id not in seen_messages:
-                            service_raw = safe_text(sms.get('originator', 'Unknown')).upper()
+                        service_raw = safe_text(sms.get('originator', 'Unknown')).upper()
+                        term_data = sms.get('termination', {})
+                        raw_number = str(term_data.get('test_number', sms.get('test_number', 'Unknown')))
+                        range_count_text = safe_text(sms.get('range', 'Active')) 
+                        country_info, exact_range = get_country_and_exact_range(raw_number, range_count_text)
+                        full_text = safe_text(sms.get('messagedata', 'No Text'))
+                        
+                        msg_signature = f"{exact_range}_{service_raw}_{full_text}"
+                        
+                        if msg_id not in seen_messages and msg_signature not in seen_signatures:
                             
-                            # 🚫 Block unwanted services like TIKTOKADS
+                            if len(seen_signatures) > 2000:
+                                seen_signatures.clear()
+                                seen_messages.clear()
+                                
+                            seen_messages.add(msg_id)
+                            seen_signatures.add(msg_signature)
+                            
                             if any(blocked in service_raw for blocked in BLOCKED_SERVICES):
-                                seen_messages.add(msg_id)
                                 continue
 
-                            # ⚠️ Ensure only Allowed Services pass
                             if not any(allowed in service_raw for allowed in ALLOWED_SERVICES):
-                                seen_messages.add(msg_id)
                                 continue 
                             
-                            term_data = sms.get('termination', {})
-                            raw_number = str(term_data.get('test_number', sms.get('test_number', 'Unknown')))
-                            range_count_text = safe_text(sms.get('range', 'Active')) 
+                            # 🧠 COUNTRY AI TRACKER
+                            if country_info not in country_activity_tracker:
+                                country_activity_tracker[country_info] = []
                             
-                            country_info, exact_range = get_country_and_exact_range(raw_number, range_count_text)
+                            country_activity_tracker[country_info].append(current_time)
+                            country_activity_tracker[country_info] = [t for t in country_activity_tracker[country_info] if current_time - t <= TIME_WINDOW]
                             
-                            # 🧠 15-MINUTE AI SLIDING WINDOW MEMORY 
-                            if exact_range not in range_activity_tracker:
-                                range_activity_tracker[exact_range] = []
+                            recent_country_otp_count = len(country_activity_tracker[country_info])
                             
-                            range_activity_tracker[exact_range].append(current_time)
-                            range_activity_tracker[exact_range] = [t for t in range_activity_tracker[exact_range] if current_time - t <= TIME_WINDOW]
-                            
-                            recent_otp_count = len(range_activity_tracker[exact_range])
-                            
-                            # ⚠️ NEW LOGIC: EVERY OTP GETS POSTED NOW!
-                            # If it hits 4 or more OTPs in 15 mins, it gets the HIGHLY ACTIVE title
-                            if recent_otp_count >= HIGH_ACTIVE_THRESHOLD:
+                            if recent_country_otp_count >= HIGH_ACTIVE_THRESHOLD:
                                 title_header = "🔥 <b>HIGHLY ACTIVE RANGE</b> 🔥"
                             else:
                                 title_header = "✅ <b>ACTIVE NEW RANGE</b>"
                                 
                             service_display = SERVICE_LOGOS.get(service_raw, f"🌐 {service_raw}")
-                            full_text = safe_text(sms.get('messagedata', 'No Text'))
 
                             msg_body = (
                                 f"{title_header}\n"
@@ -360,14 +366,13 @@ def monitor_ranges():
                             
                             try:
                                 bot.send_message(GROUP_ID, msg_body, parse_mode="HTML", reply_markup=markup)
-                                seen_messages.add(msg_id)
-                                print(f"✅ OTP Sent (Hits: {recent_otp_count}) >> {service_raw} | Range: {exact_range}")
+                                print(f"✅ OTP Sent >> {country_info} (Hits: {recent_country_otp_count}) | Range: {exact_range}")
                                 time.sleep(3.5) 
                             except Exception as e:
                                 if "Too Many Requests" in str(e):
                                     retry_match = re.search(r'retry after (\d+)', str(e))
                                     wait_time = int(retry_match.group(1)) if retry_match else 10
-                                    print(f"⏳ Telegram Anti-Spam (429)! Pausing for {wait_time} seconds...")
+                                    print(f"⏳ Telegram Anti-Spam! Pausing for {wait_time} seconds...")
                                     time.sleep(wait_time + 1)
                                 else:
                                     print(f"❌ Telegram Error: {e}")
@@ -389,7 +394,7 @@ def monitor_ranges():
         print("🔄 Connection lost or Session expired. Going back to Steal Cookies...")
 
 if __name__ == "__main__":
-    print("🤖 Master Hybrid Bot is turning on with AI Active Range Tracker...")
+    print("🤖 Master Hybrid Bot is turning on with Full Country List...")
     threading.Thread(target=monitor_ranges, daemon=True).start()
     
     while True:
