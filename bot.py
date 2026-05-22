@@ -30,7 +30,7 @@ SERVICE_LOGOS = {
     "TIKTOK": "🎵 TikTok", "GOOGLE": "🔴 Google"
 }
 ALLOWED_SERVICES = list(SERVICE_LOGOS.keys())
-BLOCKED_SERVICES = ["TIKTOKADS"] # TikTokAds ব্লক করা হলো
+BLOCKED_SERVICES = ["TIKTOKADS"] # TikTokAds Blocked
 
 # ==========================================
 # 🌍 COMPLETE COUNTRY DICTIONARY (250+ Countries)
@@ -170,43 +170,31 @@ def safe_text(text):
     return re.sub(r'\s+', ' ', text).strip()
 
 # ==========================================
-# 🌐 STEP 1: AUTO-LOGIN & STEAL COOKIE & XSRF
+# 🌐 STEP 1: AUTO-LOGIN & STEAL COOKIE
 # ==========================================
 def get_fresh_cookies():
     print("🚀 Launching invisible Browser to get fresh Cookies...")
     driver = None
     try:
         driver = Driver(uc=True, headless=False)
-        driver.set_page_load_timeout(45)
         
-        print("🔐 Navigating to iVASMS login...")
-        try:
-            driver.get("https://www.ivasms.com/login")
-        except Exception:
-            pass
+        print("🔐 Navigating to iVASMS login with Anti-Bot bypass...")
+        # ⚠️ MAGIC BYPASS: এটি ক্লাউডফ্লেয়ারের হার্ড ক্যাপচা ব্লক করার জন্য স্পেশাল ফাংশন
+        driver.uc_open_with_reconnect("https://www.ivasms.com/login", 5)
         
         try:
             driver.uc_gui_click_captcha()
-            time.sleep(2)
-        except Exception:
+            time.sleep(3)
+        except:
             pass
         
         print("⏳ Waiting for Email Field...")
-        driver.wait_for_element('input[name="email"]', timeout=30)
+        # টাইমআউট বাড়িয়ে দেওয়া হলো যাতে ক্লাউডফ্লেয়ার চেকিংয়ের পর্যাপ্ত সময় পায়
+        driver.wait_for_element('input[name="email"]', timeout=40)
         
         print("✅ CF bypassed! Entering credentials...")
         driver.type('input[name="email"]', EMAIL)
         driver.type('input[name="password"]', PASSWORD)
-        
-        print("⏳ Waiting 7 seconds for embedded Turnstile Captcha to auto-resolve...")
-        time.sleep(7)
-        
-        print("🤖 Attempting to click Turnstile just in case...")
-        try:
-            driver.uc_gui_click_captcha()
-            time.sleep(3)
-        except Exception:
-            pass
         
         print("🖱️ Clicking Login Submit Button...")
         try:
@@ -221,7 +209,7 @@ def get_fresh_cookies():
             timeout_counter -= 1
             
         if "login" in driver.current_url:
-            print("❌ Still on login page! Check Email/Password or CF blocked it.")
+            print("❌ Still on login page! Cloudflare might have blocked this GitHub IP.")
             driver.quit()
             return None, None, None
             
