@@ -30,7 +30,7 @@ SERVICE_LOGOS = {
     "TIKTOK": "🎵 TikTok", "GOOGLE": "🔴 Google"
 }
 ALLOWED_SERVICES = list(SERVICE_LOGOS.keys())
-BLOCKED_SERVICES = ["TIKTOKADS"] 
+BLOCKED_SERVICES = ["TIKTOKADS"] # TikTokAds ব্লক করা হলো
 
 # ==========================================
 # 🌍 COMPLETE COUNTRY DICTIONARY (250+ Countries)
@@ -108,11 +108,10 @@ except Exception:
 seen_messages = set()
 is_first_run = True
 
-# 🧠 SMART AI MEMORY (For High Active Ranges)
+# 🧠 SMART AI MEMORY (For High Active Ranges ONLY)
 range_activity_tracker = {}
 TIME_WINDOW = 900 # 15 minutes window
-MIN_OTP_THRESHOLD = 3 # Minimum 3 OTPs required to post
-HIGH_ACTIVE_THRESHOLD = 5 # 5+ OTPs marks it as HIGHLY ACTIVE
+HIGH_ACTIVE_THRESHOLD = 4 # ৪টি বা তার বেশি ওটিপি আসলে 'HIGHLY ACTIVE' ট্যাগ পাবে
 
 @bot.message_handler(commands=['setbot'])
 def set_bot_username(message):
@@ -163,14 +162,14 @@ def safe_text(text):
     return re.sub(r'\s+', ' ', text).strip()
 
 # ==========================================
-# 🌐 STEP 1: AUTO-LOGIN & STEAL COOKIE & XSRF
+# 🌐 STEP 1: AUTO-LOGIN & STEAL COOKIE
 # ==========================================
 def get_fresh_cookies():
     print("🚀 Launching invisible Browser to get fresh Cookies...")
     driver = None
     try:
         driver = Driver(uc=True, headless=False)
-        driver.set_page_load_timeout(60) # ⚠️ সময় বাড়িয়ে ৬০ সেকেন্ড করা হলো
+        driver.set_page_load_timeout(45)
         
         print("🔐 Navigating to iVASMS login...")
         try:
@@ -178,28 +177,26 @@ def get_fresh_cookies():
         except Exception:
             pass
         
-        # Initial CF bypass attempt
         try:
             driver.uc_gui_click_captcha()
-            time.sleep(3)
+            time.sleep(2)
         except Exception:
             pass
         
         print("⏳ Waiting for Email Field...")
-        driver.wait_for_element('input[name="email"]', timeout=40) # ⚠️ ৪০ সেকেন্ড অপেক্ষা করবে
+        driver.wait_for_element('input[name="email"]', timeout=30)
         
         print("✅ CF bypassed! Entering credentials...")
         driver.type('input[name="email"]', EMAIL)
         driver.type('input[name="password"]', PASSWORD)
         
-        # ⚠️ আপনার আগের সেই সফল সিস্টেম: পাসওয়ার্ড বসানোর পর ১০ সেকেন্ড অপেক্ষা করবে
-        print("⏳ Waiting 10 seconds for embedded Turnstile Captcha to auto-resolve...")
-        time.sleep(10) 
+        print("⏳ Waiting 7 seconds for embedded Turnstile Captcha to auto-resolve...")
+        time.sleep(7)
         
         print("🤖 Attempting to click Turnstile just in case...")
         try:
             driver.uc_gui_click_captcha()
-            time.sleep(4)
+            time.sleep(3)
         except Exception:
             pass
         
@@ -210,7 +207,7 @@ def get_fresh_cookies():
             driver.click('button[type="submit"]')
             
         print("⏳ Waiting to reach the dashboard...")
-        timeout_counter = 40 # ⚠️ ড্যাশবোর্ড লোড হওয়ার জন্য ৪০ সেকেন্ড সময় দেওয়া হলো
+        timeout_counter = 30
         while "login" in driver.current_url and timeout_counter > 0:
             time.sleep(1)
             timeout_counter -= 1
@@ -220,8 +217,8 @@ def get_fresh_cookies():
             driver.quit()
             return None, None, None
             
-        print("✅ Dashboard Reached! Letting cookies settle for 8 seconds...")
-        time.sleep(8) 
+        print("✅ Dashboard Reached! Letting cookies settle for 5 seconds...")
+        time.sleep(5) 
         
         cookies = driver.get_cookies()
         user_agent = driver.execute_script("return navigator.userAgent;")
@@ -329,12 +326,8 @@ def monitor_ranges():
                             
                             recent_otp_count = len(range_activity_tracker[exact_range])
                             
-                            # If not highly active, monitor silently
-                            if recent_otp_count < MIN_OTP_THRESHOLD:
-                                seen_messages.add(msg_id)
-                                print(f"👀 Monitoring Range >> {exact_range} (Hit {recent_otp_count}/{MIN_OTP_THRESHOLD} for Active)")
-                                continue
-                            
+                            # ⚠️ NEW LOGIC: EVERY OTP GETS POSTED NOW!
+                            # If it hits 4 or more OTPs in 15 mins, it gets the HIGHLY ACTIVE title
                             if recent_otp_count >= HIGH_ACTIVE_THRESHOLD:
                                 title_header = "🔥 <b>HIGHLY ACTIVE RANGE</b> 🔥"
                             else:
@@ -349,7 +342,7 @@ def monitor_ranges():
                                 f"🌍 <b>Country:</b> {country_info}\n"
                                 f"🎯 <b>Range:</b> {exact_range}\n"
                                 f"⚙️ <b>Service:</b> {service_display}\n"
-                                f"📊 <b>Recent OTPs:</b> {recent_otp_count} (Last 15m)\n"
+                                f"📊 <b>Range Qty:</b> {range_count_text}\n"
                                 f"━━━━━━━━━━━━━━━━━━━\n"
                                 f"💬 <b>SMS Code:</b>\n"
                                 f"<i>{full_text}</i>"
