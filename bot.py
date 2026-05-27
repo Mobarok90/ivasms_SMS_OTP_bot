@@ -261,14 +261,19 @@ def monitor_ranges():
         }
         
         error_count = 0
+        loop_counter = 0 # ⚠️ Heartbeat Counter
         
         while error_count < 5:
             try:
                 response = scraper.get(API_URL, headers=headers, timeout=15)
                 
                 if response.status_code == 200:
-                    try: json_data = response.json()
-                    except: break
+                    # ⚠️ HTML Block Detection (To prevent silent hang)
+                    try:
+                        json_data = response.json()
+                    except ValueError:
+                        print("🚨 Received HTML instead of JSON. Cloudflare blocked the scraper! Refreshing cookies...")
+                        break
                         
                     sms_list = json_data.get('data', [])
                     
@@ -291,6 +296,7 @@ def monitor_ranges():
                         continue
 
                     current_time = time.time()
+                    new_msgs_found = False # ⚠️ Flag for Heartbeat
 
                     for sms in reversed(sms_list):
                         msg_id = str(sms.get('id', ''))
@@ -305,6 +311,7 @@ def monitor_ranges():
                         msg_signature = f"{exact_range}_{service_raw}_{full_text}"
                         
                         if msg_id not in seen_messages and msg_signature not in seen_signatures:
+                            new_msgs_found = True
                             
                             if len(seen_signatures) > 2000:
                                 seen_signatures.clear()
@@ -357,7 +364,6 @@ def monitor_ranges():
                             markup.row(btn_copy, btn_bot)
                             
                             try:
-                                # ⚠️ ম্যাজিক আপডেট: disable_notification=True অ্যাড করা হলো, এতে মেসেজ সাইলেন্টলি যাবে (কোনো সাউন্ড হবে না)
                                 bot.send_message(GROUP_ID, msg_body, parse_mode="HTML", reply_markup=markup, disable_notification=True)
                                 print(f"✅ OTP Sent (Silent) >> {country_info} (Hits: {recent_country_otp_count}) | Range: {exact_range}")
                                 time.sleep(3.5) 
@@ -371,6 +377,11 @@ def monitor_ranges():
                                     print(f"❌ Telegram Error: {e}")
                                 
                     error_count = 0 
+                    loop_counter += 1
+                    
+                    # ⚠️ Heartbeat: প্রতি ১ মিনিট পর পর লগে জানাবে যে বট বেঁচে আছে
+                    if loop_counter % 6 == 0 and not new_msgs_found:
+                        print("📡 Still scanning... Waiting for NEW OTPs to arrive on the website...")
                     
                 elif response.status_code in [401, 403, 419]:
                     print(f"🚨 Session Expired (Code {response.status_code}). Restarting auto-login...")
