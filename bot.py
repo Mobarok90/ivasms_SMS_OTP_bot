@@ -8,8 +8,10 @@ import urllib.parse
 import telebot
 import cloudscraper
 import logging
+import traceback
 from seleniumbase import Driver
 
+# টেলিগ্রামের ফালতু এরর লগ বন্ধ করা হলো
 telebot.logger.setLevel(logging.ERROR)
 
 # ==========================================
@@ -111,10 +113,10 @@ seen_messages = set()
 seen_signatures = set() 
 is_first_run = True
 
-# 🧠 COUNTRY AI TRACKER (No Holds, Instant Send)
+# 🧠 COUNTRY AI TRACKER
 country_activity_tracker = {}
-TIME_WINDOW = 900 # 15 minutes window
-HIGH_ACTIVE_THRESHOLD = 4 # 4+ OTPs from the same country = HIGHLY ACTIVE
+TIME_WINDOW = 900 
+HIGH_ACTIVE_THRESHOLD = 4 
 
 @bot.message_handler(commands=['setbot'])
 def set_bot_username(message):
@@ -240,142 +242,170 @@ def monitor_ranges():
     global is_first_run, country_activity_tracker, seen_messages, seen_signatures
     
     while True:
-        cookie_dict, user_agent, xsrf_token = get_fresh_cookies()
-        
-        if not cookie_dict:
-            print("🔄 Auto-Login failed. Retrying in 30 seconds...")
-            time.sleep(30)
-            continue
+        try: # ⚠️ GLOBAL RECOVERY SHIELD: যেকোনো এরর হলে নিজে নিজে ঠিক করবে
+            cookie_dict, user_agent, xsrf_token = get_fresh_cookies()
             
-        print("⚡ Handing over cookies to Cloudscraper for 24/7 fast scanning...")
-        scraper = cloudscraper.create_scraper()
-        scraper.cookies.update(cookie_dict)
-        
-        headers = {
-            "User-Agent": user_agent,
-            "Accept": "application/json, text/javascript, */*; q=0.01",
-            "X-Requested-With": "XMLHttpRequest", 
-            "X-XSRF-TOKEN": xsrf_token,
-            "Origin": "https://www.ivasms.com",
-            "Referer": "https://www.ivasms.com/portal/sms/test/sms"
-        }
-        
-        error_count = 0
-        loop_counter = 0
-        
-        while error_count < 5:
-            try:
-                response = scraper.get(API_URL, headers=headers, timeout=15)
+            if not cookie_dict:
+                print("🔄 Auto-Login failed. Retrying in 30 seconds...")
+                time.sleep(30)
+                continue
                 
-                if response.status_code == 200:
-                    try: json_data = response.json()
-                    except: break
-                        
-                    sms_list = json_data.get('data', [])
+            print("⚡ Handing over cookies to Cloudscraper for 24/7 fast scanning...")
+            scraper = cloudscraper.create_scraper()
+            scraper.cookies.update(cookie_dict)
+            
+            headers = {
+                "User-Agent": user_agent,
+                "Accept": "application/json, text/javascript, */*; q=0.01",
+                "X-Requested-With": "XMLHttpRequest", 
+                "X-XSRF-TOKEN": xsrf_token,
+                "Origin": "https://www.ivasms.com",
+                "Referer": "https://www.ivasms.com/portal/sms/test/sms"
+            }
+            
+            error_count = 0
+            loop_counter = 0
+            
+            while error_count < 5:
+                try:
+                    response = scraper.get(API_URL, headers=headers, timeout=15)
                     
-                    if is_first_run:
-                        print(f"📥 Found {len(sms_list)} old ranges. Pre-loading Tracker silently...")
-                        for sms in sms_list:
-                            msg_id = str(sms.get('id', ''))
-                            seen_messages.add(msg_id)
+                    if response.status_code == 200:
+                        try: json_data = response.json()
+                        except: break
                             
+                        sms_list = json_data.get('data', [])
+                        
+                        if is_first_run:
+                            print(f"📥 Found {len(sms_list)} old ranges. Pre-loading Tracker silently...")
+                            for sms in sms_list:
+                                msg_id = str(sms.get('id', ''))
+                                seen_messages.add(msg_id)
+                                
+                                term_data = sms.get('termination', {})
+                                raw_number = str(term_data.get('test_number', sms.get('test_number', 'Unknown')))
+                                country_info, _ = get_country_and_exact_range(raw_number, "")
+                                
+                                if country_info not in country_activity_tracker:
+                                    country_activity_tracker[country_info] = []
+                                country_activity_tracker[country_info].append(time.time())
+                                
+                            is_first_run = False
+                            time.sleep(5)
+                            continue
+
+                        current_time = time.time()
+                        new_msgs_found = False
+
+                        for sms in reversed(sms_list):
+                            msg_id = str(sms.get('id', ''))
+                            
+                            service_raw = safe_text(sms.get('originator', 'Unknown')).upper()
                             term_data = sms.get('termination', {})
                             raw_number = str(term_data.get('test_number', sms.get('test_number', 'Unknown')))
-                            country_info, _ = get_country_and_exact_range(raw_number, "")
+                            range_count_text = safe_text(sms.get('range', 'Active')) 
+                            country_info, exact_range = get_country_and_exact_range(raw_number, range_count_text)
+                            full_text = safe_text(sms.get('messagedata', 'No Text'))
                             
-                            if country_info not in country_activity_tracker:
-                                country_activity_tracker[country_info] = []
-                            country_activity_tracker[country_info].append(time.time())
+                            msg_signature = f"{exact_range}_{service_raw}_{full_text}"
                             
-                        is_first_run = False
-                        time.sleep(5)
-                        continue
-
-                    current_time = time.time()
-                    new_msgs_found = False
-
-                    for sms in reversed(sms_list):
-                        msg_id = str(sms.get('id', ''))
-                        
-                        service_raw = safe_text(sms.get('originator', 'Unknown')).upper()
-                        term_data = sms.get('termination', {})
-                        raw_number = str(term_data.get('test_number', sms.get('test_number', 'Unknown')))
-                        range_count_text = safe_text(sms.get('range', 'Active')) 
-                        country_info, exact_range = get_country_and_exact_range(raw_number, range_count_text)
-                        full_text = safe_text(sms.get('messagedata', 'No Text'))
-                        
-                        msg_signature = f"{exact_range}_{service_raw}_{full_text}"
-                        
-                        if msg_id not in seen_messages and msg_signature not in seen_signatures:
-                            new_msgs_found = True
-                            
-                            if len(seen_signatures) > 2000:
-                                seen_signatures.clear()
-                                seen_messages.clear()
+                            if msg_id not in seen_messages and msg_signature not in seen_signatures:
+                                new_msgs_found = True
                                 
-                            seen_messages.add(msg_id)
-                            seen_signatures.add(msg_signature)
-                            
-                            if any(blocked in service_raw for blocked in BLOCKED_SERVICES):
-                                continue
-
-                            if not any(allowed in service_raw for allowed in ALLOWED_SERVICES):
-                                continue 
-                            
-                            if country_info not in country_activity_tracker:
-                                country_activity_tracker[country_info] = []
-                            
-                            country_activity_tracker[country_info].append(current_time)
-                            country_activity_tracker[country_info] = [t for t in country_activity_tracker[country_info] if current_time - t <= TIME_WINDOW]
-                            
-                            recent_country_otp_count = len(country_activity_tracker[country_info])
-                            
-                            # ⚠️ NO HOLD LOGIC: Message sends INSTANTLY as soon as it arrives!
-                            if recent_country_otp_count >= HIGH_ACTIVE_THRESHOLD:
-                                title_header = "🔥 <b>HIGHLY ACTIVE RANGE</b> 🔥"
-                            else:
-                                title_header = "✅ <b>ACTIVE NEW RANGE</b>"
+                                if len(seen_signatures) > 2000:
+                                    seen_signatures.clear()
+                                    seen_messages.clear()
+                                    
+                                seen_messages.add(msg_id)
+                                seen_signatures.add(msg_signature)
                                 
-                            service_display = SERVICE_LOGOS.get(service_raw, f"🌐 {service_raw}")
+                                if any(blocked in service_raw for blocked in BLOCKED_SERVICES):
+                                    continue
 
-                            msg_body = (
-                                f"{title_header}\n"
-                                f"━━━━━━━━━━━━━━━━━━━\n"
-                                f"🌍 <b>Country:</b> {country_info}\n"
-                                f"🎯 <b>Range:</b> {exact_range}\n"
-                                f"⚙️ <b>Service:</b> {service_display}\n"
-                                f"📊 <b>Range Qty:</b> {range_count_text}\n"
-                                f"━━━━━━━━━━━━━━━━━━━\n"
-                                f"💬 <b>SMS Code:</b>\n"
-                                f"<i>{full_text}</i>"
-                            )
-                            
-                            markup = telebot.types.InlineKeyboardMarkup()
-                            try:
-                                copy_action = telebot.types.CopyTextButton(text=exact_range)
-                                btn_copy = telebot.types.InlineKeyboardButton("📋 RANGE", copy_text=copy_action)
-                            except AttributeError:
-                                btn_copy = telebot.types.InlineKeyboardButton("📋 RANGE", switch_inline_query_current_chat=exact_range)
+                                if not any(allowed in service_raw for allowed in ALLOWED_SERVICES):
+                                    continue 
                                 
-                            btn_bot = telebot.types.InlineKeyboardButton("🤖 BOTLINK", url=f"https://t.me/{USER_BOT_USERNAME}")
-                            markup.row(btn_copy, btn_bot)
-                            
-                            try:
-                                # ⚠️ TELEGRAM SOUND MUTED (disable_notification=True)
-                                bot.send_message(GROUP_ID, msg_body, parse_mode="HTML", reply_markup=markup, disable_notification=True)
-                                print(f"✅ OTP Sent (Silent) >> {country_info} (Hits: {recent_country_otp_count}) | Range: {exact_range}")
-                                time.sleep(3.5) 
-                            except Exception as e:
-                                if "Too Many Requests" in str(e):
-                                    retry_match = re.search(r'retry after (\d+)', str(e))
-                                    wait_time = int(retry_match.group(1)) if retry_match else 10
-                                    print(f"⏳ Telegram Anti-Spam! Pausing for {wait_time} seconds...")
-                                    time.sleep(wait_time + 1)
+                                if country_info not in country_activity_tracker:
+                                    country_activity_tracker[country_info] = []
+                                
+                                country_activity_tracker[country_info].append(current_time)
+                                country_activity_tracker[country_info] = [t for t in country_activity_tracker[country_info] if current_time - t <= TIME_WINDOW]
+                                
+                                recent_country_otp_count = len(country_activity_tracker[country_info])
+                                
+                                if recent_country_otp_count >= HIGH_ACTIVE_THRESHOLD:
+                                    title_header = "🔥 <b>HIGHLY ACTIVE RANGE</b> 🔥"
                                 else:
-                                    print(f"❌ Telegram Error: {e}")
+                                    title_header = "✅ <b>ACTIVE NEW RANGE</b>"
+                                    
+                                service_display = SERVICE_LOGOS.get(service_raw, f"🌐 {service_raw}")
+
+                                msg_body = (
+                                    f"{title_header}\n"
+                                    f"━━━━━━━━━━━━━━━━━━━\n"
+                                    f"🌍 <b>Country:</b> {country_info}\n"
+                                    f"🎯 <b>Range:</b> {exact_range}\n"
+                                    f"⚙️ <b>Service:</b> {service_display}\n"
+                                    f"📊 <b>Range Qty:</b> {range_count_text}\n"
+                                    f"━━━━━━━━━━━━━━━━━━━\n"
+                                    f"💬 <b>SMS Code:</b>\n"
+                                    f"<i>{full_text}</i>"
+                                )
                                 
-                    error_count = 0 
-                    loop_counter += 1
+                                markup = telebot.types.InlineKeyboardMarkup()
+                                try:
+                                    copy_action = telebot.types.CopyTextButton(text=exact_range)
+                                    btn_copy = telebot.types.InlineKeyboardButton("📋 RANGE", copy_text=copy_action)
+                                except AttributeError:
+                                    btn_copy = telebot.types.InlineKeyboardButton("📋 RANGE", switch_inline_query_current_chat=exact_range)
+                                    
+                                btn_bot = telebot.types.InlineKeyboardButton("🤖 BOTLINK", url=f"https://t.me/{USER_BOT_USERNAME}")
+                                markup.row(btn_copy, btn_bot)
+                                
+                                try:
+                                    bot.send_message(GROUP_ID, msg_body, parse_mode="HTML", reply_markup=markup, disable_notification=True)
+                                    print(f"✅ OTP Sent (Silent) >> {country_info} (Hits: {recent_country_otp_count}) | Range: {exact_range}")
+                                    time.sleep(3.5) 
+                                except Exception as e:
+                                    if "Too Many Requests" in str(e):
+                                        retry_match = re.search(r'retry after (\d+)', str(e))
+                                        wait_time = int(retry_match.group(1)) if retry_match else 10
+                                        print(f"⏳ Telegram Anti-Spam! Pausing for {wait_time} seconds...")
+                                        time.sleep(wait_time + 1)
+                                    else:
+                                        print(f"❌ Telegram Error: {e}")
+                                    
+                        error_count = 0 
+                        loop_counter += 1
+                        
+                        if loop_counter % 6 == 0 and not new_msgs_found:
+                            print("📡 Still scanning... Waiting for NEW OTPs to arrive on the website...")
+                        
+                    elif response.status_code in [401, 403, 419]:
+                        print(f"🚨 Session Expired (Code {response.status_code}). Restarting auto-login...")
+                        break 
+                    else:
+                        error_count += 1
+                            
+                except Exception as e:
+                    print(f"⚠️ Fetch Error: {e}")
+                    error_count += 1
                     
-                    if loop_counter % 6 == 0 and not new_msgs_found:
-                        print("📡 St
+                time.sleep(10)
+                
+            print("🔄 Connection lost or Session expired. Going back to Steal Cookies...")
+            
+        except Exception as e:
+            print(f"🔥 Critical System Error! Self-healing in 10s... Details: {e}")
+            traceback.print_exc()
+            time.sleep(10)
+
+if __name__ == "__main__":
+    print("🤖 Master Hybrid Bot is turning on with Auto-Recovery Shield...")
+    threading.Thread(target=monitor_ranges, daemon=True).start()
+    
+    while True:
+        try:
+            bot.infinity_polling(timeout=20, long_polling_timeout=10, skip_pending=True)
+        except Exception:
+            time.sleep(3)
