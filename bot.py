@@ -111,10 +111,10 @@ seen_messages = set()
 seen_signatures = set() 
 is_first_run = True
 
-# 🧠 COUNTRY AI TRACKER
+# 🧠 COUNTRY AI TRACKER (No Holds, Instant Send)
 country_activity_tracker = {}
-TIME_WINDOW = 900 
-HIGH_ACTIVE_THRESHOLD = 4 
+TIME_WINDOW = 900 # 15 minutes window
+HIGH_ACTIVE_THRESHOLD = 4 # 4+ OTPs from the same country = HIGHLY ACTIVE
 
 @bot.message_handler(commands=['setbot'])
 def set_bot_username(message):
@@ -261,19 +261,15 @@ def monitor_ranges():
         }
         
         error_count = 0
-        loop_counter = 0 # ⚠️ Heartbeat Counter
+        loop_counter = 0
         
         while error_count < 5:
             try:
                 response = scraper.get(API_URL, headers=headers, timeout=15)
                 
                 if response.status_code == 200:
-                    # ⚠️ HTML Block Detection (To prevent silent hang)
-                    try:
-                        json_data = response.json()
-                    except ValueError:
-                        print("🚨 Received HTML instead of JSON. Cloudflare blocked the scraper! Refreshing cookies...")
-                        break
+                    try: json_data = response.json()
+                    except: break
                         
                     sms_list = json_data.get('data', [])
                     
@@ -296,7 +292,7 @@ def monitor_ranges():
                         continue
 
                     current_time = time.time()
-                    new_msgs_found = False # ⚠️ Flag for Heartbeat
+                    new_msgs_found = False
 
                     for sms in reversed(sms_list):
                         msg_id = str(sms.get('id', ''))
@@ -334,6 +330,7 @@ def monitor_ranges():
                             
                             recent_country_otp_count = len(country_activity_tracker[country_info])
                             
+                            # ⚠️ NO HOLD LOGIC: Message sends INSTANTLY as soon as it arrives!
                             if recent_country_otp_count >= HIGH_ACTIVE_THRESHOLD:
                                 title_header = "🔥 <b>HIGHLY ACTIVE RANGE</b> 🔥"
                             else:
@@ -364,6 +361,7 @@ def monitor_ranges():
                             markup.row(btn_copy, btn_bot)
                             
                             try:
+                                # ⚠️ TELEGRAM SOUND MUTED (disable_notification=True)
                                 bot.send_message(GROUP_ID, msg_body, parse_mode="HTML", reply_markup=markup, disable_notification=True)
                                 print(f"✅ OTP Sent (Silent) >> {country_info} (Hits: {recent_country_otp_count}) | Range: {exact_range}")
                                 time.sleep(3.5) 
@@ -379,30 +377,5 @@ def monitor_ranges():
                     error_count = 0 
                     loop_counter += 1
                     
-                    # ⚠️ Heartbeat: প্রতি ১ মিনিট পর পর লগে জানাবে যে বট বেঁচে আছে
                     if loop_counter % 6 == 0 and not new_msgs_found:
-                        print("📡 Still scanning... Waiting for NEW OTPs to arrive on the website...")
-                    
-                elif response.status_code in [401, 403, 419]:
-                    print(f"🚨 Session Expired (Code {response.status_code}). Restarting auto-login...")
-                    break 
-                else:
-                    error_count += 1
-                        
-            except Exception as e:
-                print(f"⚠️ Fetch Error: {e}")
-                error_count += 1
-                
-            time.sleep(10)
-            
-        print("🔄 Connection lost or Session expired. Going back to Steal Cookies...")
-
-if __name__ == "__main__":
-    print("🤖 Master Hybrid Bot is turning on with Full Country List & Silent Messages...")
-    threading.Thread(target=monitor_ranges, daemon=True).start()
-    
-    while True:
-        try:
-            bot.infinity_polling(timeout=20, long_polling_timeout=10, skip_pending=True)
-        except Exception:
-            time.sleep(3)
+                        print("📡 St
