@@ -36,23 +36,71 @@ ALLOWED_SERVICES = list(SERVICE_LOGOS.keys())
 BLOCKED_SERVICES = ["TIKTOKADS"] 
 
 # ==========================================
-# 🌍 COMPLETE COUNTRY DICTIONARY (250+ Countries)
+# 🌍 SUPER MASSIVE COUNTRY DICTIONARY (270+ Codes)
 # ==========================================
 COUNTRY_DICT = {
-    "1": ("USA/Canada", "🇺🇸/🇨🇦"), "7": ("Russia", "🇷🇺"), "20": ("Egypt", "🇪🇬"), 
+    "1": ("USA/Canada", "🇺🇸/🇨🇦"), "7": ("Russia/KZ", "🇷🇺/🇰🇿"), "20": ("Egypt", "🇪🇬"), 
     "27": ("South Africa", "🇿🇦"), "30": ("Greece", "🇬🇷"), "31": ("Netherlands", "🇳🇱"), 
     "32": ("Belgium", "🇧🇪"), "33": ("France", "🇫🇷"), "34": ("Spain", "🇪🇸"), 
-    "39": ("Italy", "🇮🇹"), "44": ("UK", "🇬🇧"), "49": ("Germany", "🇩🇪"), 
-    "51": ("Peru", "🇵🇪"), "52": ("Mexico", "🇲🇽"), "54": ("Argentina", "🇦🇷"), 
-    "55": ("Brazil", "🇧🇷"), "57": ("Colombia", "🇨🇴"), "60": ("Malaysia", "🇲🇾"), 
-    "62": ("Indonesia", "🇮🇩"), "63": ("Philippines", "🇵🇭"), "66": ("Thailand", "🇹🇭"), 
+    "36": ("Hungary", "🇭🇺"), "39": ("Italy", "🇮🇹"), "40": ("Romania", "🇷🇴"), 
+    "41": ("Switzerland", "🇨🇭"), "42": ("Czech/Slovakia", "🇨🇿/🇸🇰"), "43": ("Austria", "🇦🇹"), 
+    "44": ("UK", "🇬🇧"), "45": ("Denmark", "🇩🇰"), "46": ("Sweden", "🇸🇪"), 
+    "47": ("Norway", "🇳🇴"), "48": ("Poland", "🇵🇱"), "49": ("Germany", "🇩🇪"), 
+    "51": ("Peru", "🇵🇪"), "52": ("Mexico", "🇲🇽"), "53": ("Cuba", "🇨🇺"), 
+    "54": ("Argentina", "🇦🇷"), "55": ("Brazil", "🇧🇷"), "56": ("Chile", "🇨🇱"), 
+    "57": ("Colombia", "🇨🇴"), "58": ("Venezuela", "🇻🇪"), "60": ("Malaysia", "🇲🇾"), 
+    "61": ("Australia", "🇦🇺"), "62": ("Indonesia", "🇮🇩"), "63": ("Philippines", "🇵🇭"), 
+    "64": ("New Zealand", "🇳🇿"), "65": ("Singapore", "🇸🇬"), "66": ("Thailand", "🇹🇭"), 
     "81": ("Japan", "🇯🇵"), "82": ("South Korea", "🇰🇷"), "84": ("Vietnam", "🇻🇳"), 
     "86": ("China", "🇨🇳"), "90": ("Turkey", "🇹🇷"), "91": ("India", "🇮🇳"), 
-    "92": ("Pakistan", "🇵🇰"), "93": ("Afghanistan", "🇦🇫"), "98": ("Iran", "🇮🇷"), 
-    "212": ("Morocco", "🇲🇦"), "234": ("Nigeria", "🇳🇬"), "249": ("Sudan", "🇸🇩"), 
-    "251": ("Ethiopia", "🇪🇹"), "254": ("Kenya", "🇰🇪"), "351": ("Portugal", "🇵🇹"), 
-    "380": ("Ukraine", "🇺🇦"), "880": ("Bangladesh", "🇧🇩"), "966": ("Saudi Arabia", "🇸🇦"), 
-    "971": ("UAE", "🇦🇪"), "998": ("Uzbekistan", "🇺🇿")
+    "92": ("Pakistan", "🇵🇰"), "93": ("Afghanistan", "🇦🇫"), "94": ("Sri Lanka", "🇱🇰"), 
+    "95": ("Myanmar", "🇲🇲"), "98": ("Iran", "🇮🇷"), "211": ("South Sudan", "🇸🇸"), 
+    "212": ("Morocco", "🇲🇦"), "213": ("Algeria", "🇩🇿"), "216": ("Tunisia", "🇹🇳"), 
+    "218": ("Libya", "🇱🇾"), "220": ("Gambia", "🇬🇲"), "221": ("Senegal", "🇸🇳"), 
+    "222": ("Mauritania", "🇲🇷"), "223": ("Mali", "🇲🇱"), "224": ("Guinea", "🇬🇳"), 
+    "225": ("Ivory Coast", "🇨🇮"), "226": ("Burkina Faso", "🇧🇫"), "227": ("Niger", "🇳🇪"), 
+    "228": ("Togo", "🇹🇬"), "229": ("Benin", "🇧🇯"), "230": ("Mauritius", "🇲🇺"), 
+    "231": ("Liberia", "🇱🇷"), "232": ("Sierra Leone", "🇸🇱"), "233": ("Ghana", "🇬🇭"), 
+    "234": ("Nigeria", "🇳🇬"), "235": ("Chad", "🇹🇩"), "236": ("CAR", "🇨🇫"), 
+    "237": ("Cameroon", "🇨🇲"), "238": ("Cape Verde", "🇨🇻"), "239": ("Sao Tome", "🇸🇹"), 
+    "240": ("Equatorial Guinea", "🇬🇶"), "241": ("Gabon", "🇬🇦"), "242": ("Congo", "🇨🇬"), 
+    "243": ("DR Congo", "🇨🇩"), "244": ("Angola", "🇦🇴"), "245": ("Guinea-Bissau", "🇬🇼"), 
+    "246": ("Diego Garcia", "🇮🇴"), "248": ("Seychelles", "🇸🇨"), "249": ("Sudan", "🇸🇩"), 
+    "250": ("Rwanda", "🇷🇼"), "251": ("Ethiopia", "🇪🇹"), "252": ("Somalia", "🇸🇴"), 
+    "253": ("Djibouti", "🇩🇯"), "254": ("Kenya", "🇰🇪"), "255": ("Tanzania", "🇹🇿"), 
+    "256": ("Uganda", "🇺🇬"), "257": ("Burundi", "🇧🇮"), "258": ("Mozambique", "🇲🇿"), 
+    "260": ("Zambia", "🇿🇲"), "261": ("Madagascar", "🇲🇬"), "262": ("Reunion", "🇷🇪"), 
+    "263": ("Zimbabwe", "🇿🇼"), "264": ("Namibia", "🇳🇦"), "265": ("Malawi", "🇲🇼"), 
+    "266": ("Lesotho", "🇱🇸"), "267": ("Botswana", "🇧🇼"), "268": ("Eswatini", "🇸🇿"), 
+    "269": ("Comoros", "🇰🇲"), "290": ("St Helena", "🇸🇭"), "291": ("Eritrea", "🇪🇷"), 
+    "297": ("Aruba", "🇦🇼"), "298": ("Faroe Islands", "🇫🇴"), "299": ("Greenland", "🇬🇱"), 
+    "350": ("Gibraltar", "🇬🇮"), "351": ("Portugal", "🇵🇹"), "352": ("Luxembourg", "🇱🇺"), 
+    "353": ("Ireland", "🇮🇪"), "354": ("Iceland", "🇮🇸"), "355": ("Albania", "🇦🇱"), 
+    "356": ("Malta", "🇲🇹"), "357": ("Cyprus", "🇨🇾"), "358": ("Finland", "🇫🇮"), 
+    "359": ("Bulgaria", "🇧🇬"), "370": ("Lithuania", "🇱🇹"), "371": ("Latvia", "🇱🇻"), 
+    "372": ("Estonia", "🇪🇪"), "373": ("Moldova", "🇲🇩"), "374": ("Armenia", "🇦🇲"), 
+    "375": ("Belarus", "🇧🇾"), "376": ("Andorra", "🇦🇩"), "377": ("Monaco", "🇲🇨"), 
+    "378": ("San Marino", "🇸🇲"), "379": ("Vatican City", "🇻🇦"), "380": ("Ukraine", "🇺🇦"), 
+    "381": ("Serbia", "🇷🇸"), "382": ("Montenegro", "🇲🇪"), "383": ("Kosovo", "🇽🇰"), 
+    "385": ("Croatia", "🇭🇷"), "386": ("Slovenia", "🇸🇮"), "387": ("Bosnia", "🇧🇦"), 
+    "389": ("North Macedonia", "🇲🇰"), "420": ("Czechia", "🇨🇿"), "421": ("Slovakia", "🇸🇰"), 
+    "423": ("Liechtenstein", "🇱🇮"), "500": ("Falkland", "🇫🇰"), "501": ("Belize", "🇧🇿"), 
+    "502": ("Guatemala", "🇬🇹"), "503": ("El Salvador", "🇸🇻"), "504": ("Honduras", "🇭🇳"), 
+    "505": ("Nicaragua", "🇳🇮"), "506": ("Costa Rica", "🇨🇷"), "507": ("Panama", "🇵🇦"), 
+    "508": ("St Pierre", "🇵🇲"), "509": ("Haiti", "🇭🇹"), "590": ("Guadeloupe", "🇬🇵"), 
+    "591": ("Bolivia", "🇧🇴"), "592": ("Guyana", "🇬🇾"), "593": ("Ecuador", "🇪🇨"), 
+    "594": ("French Guiana", "🇬🇫"), "595": ("Paraguay", "🇵🇾"), "596": ("Martinique", "🇲🇶"), 
+    "597": ("Suriname", "🇸🇷"), "598": ("Uruguay", "🇺🇾"), "599": ("Curacao", "🇨🇼"), 
+    "850": ("North Korea", "🇰🇵"), "852": ("Hong Kong", "🇭🇰"), "853": ("Macau", "🇲🇴"), 
+    "855": ("Cambodia", "🇰🇭"), "856": ("Laos", "🇱🇦"), "880": ("Bangladesh", "🇧🇩"), 
+    "886": ("Taiwan", "🇹🇼"), "960": ("Maldives", "🇲🇻"), "961": ("Lebanon", "🇱🇧"), 
+    "962": ("Jordan", "🇯🇴"), "963": ("Syria", "🇸🇾"), "964": ("Iraq", "🇮🇶"), 
+    "965": ("Kuwait", "🇰🇼"), "966": ("Saudi Arabia", "🇸🇦"), "967": ("Yemen", "🇾🇪"), 
+    "968": ("Oman", "🇴🇲"), "970": ("Palestine", "🇵🇸"), "971": ("UAE", "🇦🇪"), 
+    "972": ("Israel", "🇮🇱"), "973": ("Bahrain", "🇧🇭"), "974": ("Qatar", "🇶🇦"), 
+    "975": ("Bhutan", "🇧🇹"), "976": ("Mongolia", "🇲🇳"), "977": ("Nepal", "🇳🇵"), 
+    "992": ("Tajikistan", "🇹🇯"), "993": ("Turkmenistan", "🇹🇲"), "994": ("Azerbaijan", "🇦🇿"), 
+    "995": ("Georgia", "🇬🇪"), "996": ("Kyrgyzstan", "🇰🇬"), "998": ("Uzbekistan", "🇺🇿")
 }
 
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -60,12 +108,13 @@ try: bot.remove_webhook()
 except: pass
 
 seen_messages = set()
+seen_signatures = set() 
 is_first_run = True
 
 # 🧠 COUNTRY AI TRACKER
 country_activity_tracker = {}
-TIME_WINDOW = 900 # ১৫ মিনিট (১৫ * ৬০ সেকেন্ড) এর মেমরি
-HIGH_ACTIVE_THRESHOLD = 4 # কোনো দেশ থেকে ৪টি বা তার বেশি ওটিপি আসলে 'HIGHLY ACTIVE' হবে
+TIME_WINDOW = 900 
+HIGH_ACTIVE_THRESHOLD = 4 
 
 @bot.message_handler(commands=['setbot'])
 def set_bot_username(message):
@@ -97,7 +146,9 @@ def get_country_and_exact_range(number, range_text):
     if not matched and range_text:
         letters_only = re.findall(r'[A-Za-z]+', str(range_text))
         if letters_only:
-            country_info = f"{' '.join(letters_only).title()} 🏳️"
+            country_name = ' '.join(letters_only).title()
+            if country_name.lower() != "active": 
+                country_info = f"{country_name} 🏳️"
     return country_info, exact_range
 
 def safe_text(text):
@@ -186,7 +237,7 @@ def get_fresh_cookies():
 # 📡 STEP 2: 24/7 FAST SCRAPING & AI TRACKING
 # ==========================================
 def monitor_ranges():
-    global is_first_run, country_activity_tracker, seen_messages
+    global is_first_run, country_activity_tracker, seen_messages, seen_signatures
     
     while True:
         cookie_dict, user_agent, xsrf_token = get_fresh_cookies()
@@ -210,18 +261,14 @@ def monitor_ranges():
         }
         
         error_count = 0
-        loop_counter = 0
         
         while error_count < 5:
             try:
                 response = scraper.get(API_URL, headers=headers, timeout=15)
                 
                 if response.status_code == 200:
-                    try:
-                        json_data = response.json()
-                    except:
-                        print("🚨 Received HTML instead of JSON. Refreshing cookies...")
-                        break
+                    try: json_data = response.json()
+                    except: break
                         
                     sms_list = json_data.get('data', [])
                     
@@ -244,32 +291,34 @@ def monitor_ranges():
                         continue
 
                     current_time = time.time()
-                    new_msgs_found = False
 
                     for sms in reversed(sms_list):
                         msg_id = str(sms.get('id', ''))
                         
-                        if msg_id and msg_id not in seen_messages:
-                            new_msgs_found = True
+                        service_raw = safe_text(sms.get('originator', 'Unknown')).upper()
+                        term_data = sms.get('termination', {})
+                        raw_number = str(term_data.get('test_number', sms.get('test_number', 'Unknown')))
+                        range_count_text = safe_text(sms.get('range', 'Active')) 
+                        country_info, exact_range = get_country_and_exact_range(raw_number, range_count_text)
+                        full_text = safe_text(sms.get('messagedata', 'No Text'))
+                        
+                        msg_signature = f"{exact_range}_{service_raw}_{full_text}"
+                        
+                        if msg_id not in seen_messages and msg_signature not in seen_signatures:
+                            
+                            if len(seen_signatures) > 2000:
+                                seen_signatures.clear()
+                                seen_messages.clear()
+                                
                             seen_messages.add(msg_id)
+                            seen_signatures.add(msg_signature)
                             
-                            service_raw = safe_text(sms.get('originator', 'Unknown')).upper()
-                            
-                            # TIKTOKADS ব্লক
                             if any(blocked in service_raw for blocked in BLOCKED_SERVICES):
                                 continue
 
-                            # ALLOWED_SERVICES ফিল্টার
                             if not any(allowed in service_raw for allowed in ALLOWED_SERVICES):
                                 continue 
                             
-                            term_data = sms.get('termination', {})
-                            raw_number = str(term_data.get('test_number', sms.get('test_number', 'Unknown')))
-                            range_count_text = safe_text(sms.get('range', 'Active')) 
-                            country_info, exact_range = get_country_and_exact_range(raw_number, range_count_text)
-                            full_text = safe_text(sms.get('messagedata', 'No Text'))
-                            
-                            # 🧠 COUNTRY AI TRACKER
                             if country_info not in country_activity_tracker:
                                 country_activity_tracker[country_info] = []
                             
@@ -278,7 +327,6 @@ def monitor_ranges():
                             
                             recent_country_otp_count = len(country_activity_tracker[country_info])
                             
-                            # ⚠️ ম্যাজিক আপডেট: এখন সব ওটিপি গ্রুপে যাবে (কোনো হোল্ড নেই)
                             if recent_country_otp_count >= HIGH_ACTIVE_THRESHOLD:
                                 title_header = "🔥 <b>HIGHLY ACTIVE RANGE</b> 🔥"
                             else:
@@ -309,8 +357,9 @@ def monitor_ranges():
                             markup.row(btn_copy, btn_bot)
                             
                             try:
-                                bot.send_message(GROUP_ID, msg_body, parse_mode="HTML", reply_markup=markup)
-                                print(f"✅ OTP Sent >> {country_info} (Hits: {recent_country_otp_count}) | Range: {exact_range}")
+                                # ⚠️ ম্যাজিক আপডেট: disable_notification=True অ্যাড করা হলো, এতে মেসেজ সাইলেন্টলি যাবে (কোনো সাউন্ড হবে না)
+                                bot.send_message(GROUP_ID, msg_body, parse_mode="HTML", reply_markup=markup, disable_notification=True)
+                                print(f"✅ OTP Sent (Silent) >> {country_info} (Hits: {recent_country_otp_count}) | Range: {exact_range}")
                                 time.sleep(3.5) 
                             except Exception as e:
                                 if "Too Many Requests" in str(e):
@@ -322,11 +371,6 @@ def monitor_ranges():
                                     print(f"❌ Telegram Error: {e}")
                                 
                     error_count = 0 
-                    loop_counter += 1
-                    
-                    # যদি নতুন কোনো ওটিপি না আসে, তবে লগে এই মেসেজ দেখাবে
-                    if loop_counter % 6 == 0 and not new_msgs_found:
-                        print("📡 Scanning... Waiting for NEW OTPs to arrive on the website...")
                     
                 elif response.status_code in [401, 403, 419]:
                     print(f"🚨 Session Expired (Code {response.status_code}). Restarting auto-login...")
@@ -343,7 +387,7 @@ def monitor_ranges():
         print("🔄 Connection lost or Session expired. Going back to Steal Cookies...")
 
 if __name__ == "__main__":
-    print("🤖 Master Hybrid Bot is turning on with Instant OTP delivery...")
+    print("🤖 Master Hybrid Bot is turning on with Full Country List & Silent Messages...")
     threading.Thread(target=monitor_ranges, daemon=True).start()
     
     while True:
