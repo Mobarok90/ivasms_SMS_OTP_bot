@@ -26,6 +26,16 @@ PASSWORD = os.getenv("PASSWORD")
 API_URL = "https://www.ivasms.com/portal/sms/received/getsms/number/sms"
 
 # ==========================================
+# 🎯 SERVICE FILTERS & LOGOS
+# ==========================================
+SERVICE_LOGOS = {
+    "WHATSAPP": "🟢 WhatsApp", "FACEBOOK": "📘 Facebook", "TELEGRAM": "✈️ Telegram",
+    "TIKTOK": "🎵 TikTok", "GOOGLE": "🔴 Google"
+}
+ALLOWED_SERVICES = list(SERVICE_LOGOS.keys())
+BLOCKED_SERVICES = ["TIKTOKADS"] 
+
+# ==========================================
 # 🌍 SUPER MASSIVE COUNTRY DICTIONARY (270+ Codes)
 # ==========================================
 COUNTRY_DICT = {
@@ -140,10 +150,8 @@ def safe_text(text):
 def extract_otp(full_text):
     match = re.search(r'(?<!\d)(\d{4,8})(?!\d)', full_text)
     if match: return match.group(1)
-    
     match_dash = re.search(r'\b(\d{3}[-\s]\d{3})\b', full_text)
     if match_dash: return match_dash.group(1)
-    
     return "N/A"
 
 # ==========================================
@@ -170,18 +178,23 @@ def get_fresh_cookies():
         driver.type('input[name="email"]', EMAIL)
         driver.type('input[name="password"]', PASSWORD)
         
-        time.sleep(7)
-        try: driver.uc_gui_click_captcha(); time.sleep(3)
-        except Exception: pass
+        time.sleep(5)
         
         print("🖱️ Clicking Login Submit Button...")
-        try: driver.uc_click('button[type="submit"]')
-        except Exception: driver.click('button[type="submit"]')
+        try: 
+            # ⚠️ MAGIC GHOST CLICK: এই ক্লিকে বট আর কখনোই আটকে থাকবে না!
+            driver.js_click('button[type="submit"]') 
+        except Exception: 
+            pass
             
-        timeout_counter = 30
+        print("⏳ Waiting to reach the dashboard...")
+        timeout_counter = 40
         while "login" in driver.current_url and timeout_counter > 0:
             time.sleep(1)
             timeout_counter -= 1
+            # Check if CF popped up after click
+            try: driver.uc_gui_click_captcha()
+            except: pass
             
         if "login" in driver.current_url:
             print("❌ Login Failed! Check credentials or CF block.")
@@ -249,7 +262,7 @@ def monitor_ranges():
                         try:
                             json_data = response.json()
                         except ValueError:
-                            print("🚨 API returned HTML instead of JSON. Make sure the API_URL is correct.")
+                            print("🚨 API returned HTML instead of JSON. Waiting and retrying...")
                             break 
                             
                         sms_list = json_data.get('data', [])
@@ -258,7 +271,6 @@ def monitor_ranges():
                         if is_first_run:
                             print(f"📥 Found {len(sms_list)} OTPs in inbox. Forwarding them to the group...")
                             is_first_run = False
-                            # We DO NOT 'continue' here anymore, so it proceeds to send them.
 
                         for sms in reversed(sms_list):
                             msg_id = str(sms.get('id', ''))
@@ -283,7 +295,6 @@ def monitor_ranges():
                                 otp_code = extract_otp(full_text)
                                 service_title = service_raw.title()
                                 
-                                # দেশের নাম এবং পতাকা আলাদা করা
                                 country_parts = country_info.split(' ')
                                 country_name = country_parts[0]
                                 flag = country_parts[1] if len(country_parts) > 1 else "🌐"
@@ -309,7 +320,7 @@ def monitor_ranges():
                                     # ⚠️ Paid OTP: সাউন্ড অন থাকবে (disable_notification=False)
                                     bot.send_message(GROUP_ID, msg_body, parse_mode="HTML", reply_markup=markup)
                                     print(f"✅ PAID OTP Sent >> {service_title} | Number: {exact_range}")
-                                    time.sleep(2.5) # Anti-flood delay
+                                    time.sleep(2.5) 
                                 except Exception as e:
                                     print(f"❌ Telegram Error: {e}")
                                     
