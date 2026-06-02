@@ -8,7 +8,7 @@ import html
 import urllib.parse
 import telebot
 import logging
-from seleniumbase import Driver
+from seleniumbase import SB
 
 telebot.logger.setLevel(logging.ERROR)
 
@@ -57,7 +57,7 @@ COUNTRY_DICT = {
     "218": ("Libya", "🇱🇾"), "220": ("Gambia", "🇬🇲"), "221": ("Senegal", "🇸🇳"), 
     "222": ("Mauritania", "🇲🇷"), "223": ("Mali", "🇲🇱"), "224": ("Guinea", "🇬🇳"), 
     "225": ("Ivory Coast", "🇨🇮"), "226": ("Burkina Faso", "🇧🇫"), "227": ("Niger", "🇳🇪"), 
-    "228": ("Togo", "🇹🇬"), "229": ("Benin", "🇧জয়"), "230": ("Mauritius", "🇲🇺"), 
+    "228": ("Togo", "🇹🇬"), "229": ("Benin", "🇧🇯"), "230": ("Mauritius", "🇲🇺"), 
     "231": ("Liberia", "🇱🇷"), "232": ("Sierra Leone", "🇸🇱"), "233": ("Ghana", "🇬🇭"), 
     "234": ("Nigeria", "🇳🇬"), "235": ("Chad", "🇹🇩"), "236": ("CAR", "🇨🇫"), 
     "237": ("Cameroon", "🇨🇲"), "238": ("Cape Verde", "🇨🇻"), "239": ("Sao Tome", "🇸🇹"), 
@@ -150,234 +150,248 @@ def extract_otp(full_text):
     return "N/A"
 
 # ==========================================
+# 🛠️ SMART LOGIN SUB-ROUTINE
+# ==========================================
+def login_to_account(driver):
+    print("🔐 Navigating to iVASMS login with reconnect...")
+    try: 
+        driver.uc_open_with_reconnect("https://www.ivasms.com/login", reconnect_time=6)
+    except Exception as e: 
+        print(f"⚠️ Navigation warning: {e}")
+        return False
+    
+    # পেজে আসলেই ক্লাউডফ্লেয়ার টার্নস্টাইল আছে কি না চেক করা
+    turnstile_present = driver.execute_script("""
+        return !!(document.querySelector('.cf-turnstile') || 
+                  document.querySelector('#cf-turnstile') || 
+                  document.querySelector('iframe[src*="challenges.cloudflare.com"]'));
+    """)
+    
+    if turnstile_present:
+        print("⏳ Cloudflare Turnstile detected. Waiting for auto-solve...")
+        turnstile_solved = False
+        for _ in range(25):
+            token = driver.execute_script("return document.querySelector('[name=cf-turnstile-response]') ? document.querySelector('[name=cf-turnstile-response]').value : ''")
+            if token and len(token) > 10:
+                print("✅ Cloudflare Turnstile Solved Successfully!")
+                turnstile_solved = True
+                break
+            time.sleep(1)
+        
+        if not turnstile_solved:
+            print("🤖 Attempting manual click on Turnstile...")
+            try: 
+                driver.uc_gui_click_captcha()
+                time.sleep(random.uniform(3.0, 4.0))
+            except Exception as e: 
+                print(f"⚠️ Click Turnstile failed: {e}")
+    else:
+        print("🛡️ No Cloudflare Turnstile CAPTCHA detected on page. Proceeding...")
+    
+    try:
+        print("⏳ Waiting for Email Field...")
+        driver.wait_for_element('input[name="email"]', timeout=30)
+    except Exception as e:
+        print(f"❌ Email field didn't appear (CF lock?): {e}")
+        return False
+        
+    print("✅ CF bypassed! Entering credentials like a human...")
+    driver.type('input[name="email"]', EMAIL)
+    time.sleep(random.uniform(1.5, 2.5)) # মানুষের স্বাভাবিক টাইপিং গ্যাপ
+    
+    driver.type('input[name="password"]', PASSWORD)
+    time.sleep(random.uniform(1.2, 2.0))
+    
+    time.sleep(random.uniform(1.0, 2.0)) # মানুষের সাবমিট করার প্রস্তুতি
+    
+    print("🖱️ Clicking Login Submit Button...")
+    try: driver.uc_click('button[type="submit"]')
+    except: driver.click('button[type="submit"]')
+        
+    print("⏳ Waiting to reach the dashboard...")
+    success = False
+    for _ in range(25):
+        current_url = driver.current_url
+        if "/portal" in current_url and "login" not in current_url:
+            success = True
+            break
+        time.sleep(1)
+        
+    if not success:
+        print(f"❌ Login Failed! Currently stuck at URL: {driver.current_url}")
+        return False
+        
+    print("✅ Dashboard Reached Successfully! Letting session stabilize...")
+    time.sleep(5)
+    return True
+
+# ==========================================
 # 📡 24/7 INBOX SCANNING (PAID SMS DIRECT ACCESSED)
 # ==========================================
 def monitor_ranges():
     global is_first_run, seen_messages, seen_signatures
     
-    driver = None
+    print("🚀 Initializing SeleniumBase SB Manager (Stealth Mode + Virtual Display)...")
     
-    while True:
-        try:
-            # সেশনটি না থাকলে অথবা ড্রাইভার ক্র্যাশ করলে পুনরায় ব্রাউজার রান করে লগইন করবে
-            if not driver:
-                print("🚀 Launching invisible Browser to login to Paid Account...")
-                driver = Driver(uc=True, headless=False)
-                driver.set_page_load_timeout(60)
+    # 🛠️ SB কনটেক্সট ম্যানেজার সরাসরি নিখুঁত ভার্চুয়াল ফ্রেমবাফার ও মেমোরি কন্ট্রোল সেটআপ করে।
+    with SB(uc=True, xvfb=True) as sb:
+        driver = sb.driver
+        driver.set_page_load_timeout(60)
+        
+        logged_in = False
+        
+        while True:
+            try:
+                # যদি সেশন লগআউট হয়ে যায়, তবে ব্রাউজার রি-বুট না করে সরাসরি ব্রাউজার স্ক্রিনেই রিলগইন করবে।
+                if not logged_in:
+                    logged_in = login_to_account(driver)
+                    if not logged_in:
+                        print("🔄 Login failed. Clearing cookies and retrying in 15 seconds...")
+                        try: driver.delete_all_cookies()
+                        except: pass
+                        time.sleep(15)
+                        continue
                 
-                print("🔐 Navigating to iVASMS login with reconnect...")
-                try: 
-                    driver.uc_open_with_reconnect("https://www.ivasms.com/login", reconnect_time=5)
-                except Exception as e: 
-                    print(f"⚠️ Navigation warning: {e}")
-                
-                print("⏳ Waiting for Email Field...")
-                driver.wait_for_element('input[name="email"]', timeout=30)
-                
-                print("✅ CF bypassed! Entering credentials like a human...")
-                driver.type('input[name="email"]', EMAIL)
-                time.sleep(random.uniform(1.5, 2.5)) # মানুষের টাইপিং বিহেভিয়ার ডিলে
-                
-                driver.type('input[name="password"]', PASSWORD)
-                time.sleep(random.uniform(1.2, 2.0))
-                
-                # 🚀 SMART FIX 1: পেজে আসলেই ক্লাউডফ্লেয়ার টার্নস্টাইল আছে কি না চেক করা
-                turnstile_present = driver.execute_script("""
-                    return !!(document.querySelector('.cf-turnstile') || 
-                              document.querySelector('#cf-turnstile') || 
-                              document.querySelector('iframe[src*="challenges.cloudflare.com"]'));
-                """)
-                
-                if turnstile_present:
-                    print("⏳ Cloudflare Turnstile detected. Waiting for auto-solve...")
-                    turnstile_solved = False
-                    for _ in range(25):
-                        token = driver.execute_script("return document.querySelector('[name=cf-turnstile-response]') ? document.querySelector('[name=cf-turnstile-response]').value : ''")
-                        if token and len(token) > 10:
-                            print("✅ Cloudflare Turnstile Solved Successfully!")
-                            turnstile_solved = True
-                            break
-                        time.sleep(1)
-                    
-                    if not turnstile_solved:
-                        print("🤖 Attempting manual click on Turnstile...")
-                        try: 
-                            driver.uc_gui_click_captcha()
-                            time.sleep(random.uniform(3.0, 4.0))
-                        except: 
-                            pass
-                else:
-                    print("🛡️ No Cloudflare Turnstile CAPTCHA detected on page. Proceeding...")
-                
-                time.sleep(random.uniform(1.0, 2.0)) # মানুষের সাবমিট ডিলে
-                
-                print("🖱️ Clicking Login Submit Button...")
-                try: driver.uc_click('button[type="submit"]')
-                except: driver.click('button[type="submit"]')
-                    
-                print("⏳ Waiting to reach the dashboard...")
-                success = False
-                for _ in range(25):
-                    current_url = driver.current_url
-                    if "/portal" in current_url and "login" not in current_url:
-                        success = True
-                        break
-                    time.sleep(1)
-                    
-                if not success:
-                    print(f"❌ Login Failed! Currently stuck at URL: {driver.current_url}. Retrying login...")
-                    try: driver.quit()
+                print("⚡ Scanning Paid Inbox directly via browser tab...")
+                try:
+                    driver.get("https://www.ivasms.com/portal/live/my_sms")
+                    time.sleep(2.5) # পেজ লোড সেটেলমেন্ট ডিলে
+                except Exception as get_err:
+                    print(f"⚠️ API navigation error: {get_err}. Forcing re-login...")
+                    logged_in = False
+                    try: driver.delete_all_cookies()
                     except: pass
-                    driver = None
-                    time.sleep(15)
+                    time.sleep(5)
                     continue
                     
-                print("✅ Dashboard Reached Successfully! Letting session stabilize...")
-                time.sleep(5) 
-            
-            # 🚀 SMART FIX 2: কোনো স্ক্রিপ্ট ফেচ নয়, ব্রাউজার নিজেই সরাসরি এপিআই ইউআরএল লোড করবে
-            print("⚡ Scanning Paid Inbox directly via browser tab...")
-            try:
-                driver.get("https://www.ivasms.com/portal/live/my_sms")
-                time.sleep(2.5) # পেজ লোড সেটেলমেন্ট ডিলে
-            except Exception as get_err:
-                print(f"⚠️ API navigation error: {get_err}. Restarting driver...")
-                try: driver.quit()
-                except: pass
-                driver = None
-                time.sleep(10)
-                continue
-                
-            # ব্রাউজার স্ক্রিন থেকে সরাসরি টেক্সট রিড করা
-            try:
-                raw_text = driver.find_element("tag name", "body").text.strip()
-            except Exception as dom_err:
-                print(f"⚠️ Cannot read body text: {dom_err}. Restarting driver...")
-                try: driver.quit()
-                except: pass
-                driver = None
-                time.sleep(10)
-                continue
-                
-            # ক্লাউডফ্লেয়ার ব্লকিং ডিটেকশন ও স্বয়ংক্রিয় ক্যাপচা ক্লিক সলভার
-            if "cloudflare" in raw_text.lower() or "just a moment" in raw_text.lower() or "security" in raw_text.lower():
-                print("🛡️ Cloudflare challenge detected on API URL! Attempting bypass...")
+                # ব্রাউজার স্ক্রিন থেকে সরাসরি টেক্সট রিড করা
                 try:
-                    driver.uc_gui_click_captcha()
+                    raw_text = driver.find_element("tag name", "body").text.strip()
+                except Exception as dom_err:
+                    print(f"⚠️ Cannot read body text: {dom_err}. Forcing re-login...")
+                    logged_in = False
+                    try: driver.delete_all_cookies()
+                    except: pass
                     time.sleep(5)
-                except:
-                    pass
-                continue
-                
-            # যদি সেশন এক্সপায়ার হয়ে লগইন পেজে নিয়ে যায় বা ডাটা ইনভ্যালিড হয়
-            if not raw_text.startswith("{") and not raw_text.startswith("["):
-                print("🚨 API returned HTML Page instead of JSON! Session expired. Re-logging in...")
-                try: driver.quit()
-                except: pass
-                driver = None
-                time.sleep(5)
-                continue
-                
-            # ডাটা সফলভাবে পার্স করা
-            try:
-                json_data = json.loads(raw_text)
-            except Exception as parse_err:
-                print(f"🚨 JSON Parse Exception: {parse_err}. Raw text received: {raw_text[:150]}")
-                time.sleep(6)
-                continue
-                
-            # JSON Data Handle
-            if isinstance(json_data, dict):
-                sms_list = json_data.get('data', [])
-            elif isinstance(json_data, list):
-                sms_list = json_data
-            else:
-                sms_list = []
-                
-            if not sms_list or len(sms_list) == 0:
-                if is_first_run:
-                    print("📭 Inbox is currently empty. Waiting peacefully for new OTPs...")
-                    is_first_run = False
-                time.sleep(6)
-                continue
-                
-            # Forwarding OTPs
-            if is_first_run:
-                print(f"📥 Found {len(sms_list)} OTPs in inbox. Forwarding them to the group...")
-                is_first_run = False
-
-            for sms in reversed(sms_list):
-                msg_id = str(sms.get('id', ''))
-                
-                service_raw = safe_text(sms.get('originator', sms.get('sender', 'Unknown')))
-                term_data = sms.get('termination', {})
-                raw_number = str(sms.get('number', sms.get('receiver', term_data.get('test_number', 'Unknown'))))
-                full_text = safe_text(sms.get('messagedata', sms.get('message', 'No Text')))
-                
-                msg_signature = f"{raw_number}_{service_raw}_{full_text}"
-                
-                if msg_id and msg_id not in seen_messages and msg_signature not in seen_signatures:
+                    continue
                     
-                    if len(seen_signatures) > 1000:
-                        seen_signatures.clear()
-                        seen_messages.clear()
-                        
-                    seen_messages.add(msg_id)
-                    seen_signatures.add(msg_signature)
-                    
-                    country_info, exact_range = get_country_and_exact_range(raw_number, "")
-                    otp_code = extract_otp(full_text)
-                    service_title = service_raw.title()
-                    
-                    country_parts = country_info.split(' ')
-                    country_name = country_parts[0]
-                    flag = country_parts[1] if len(country_parts) > 1 else "🌐"
-
-                    # 🌟 RS OTP BOT STYLE DESIGN
-                    msg_body = (
-                        f"{flag} {country_name} {service_title} Otp Code Received Successfully 🎉\n\n"
-                        f"🔐 <b>Your OTP:</b> <code>{otp_code}</code>\n\n"
-                        f"☎️ <b>Number:</b> <code>{exact_range}</code>\n"
-                        f"⚙️ <b>Service:</b> {service_title}\n"
-                        f"🌍 <b>Country:</b> {country_info}\n\n"
-                        f"📩 <b>Full-Message:</b>\n"
-                        f"<code>{full_text}</code>"
-                    )
-                    
-                    markup = telebot.types.InlineKeyboardMarkup(row_width=2)
-                    markup.add(
-                        telebot.types.InlineKeyboardButton("🚀 Panel", url="https://t.me/"),
-                        telebot.types.InlineKeyboardButton("🛒 Buy IP", url="https://t.me/")
-                    )
-                    
+                # ক্লাউডফ্লেয়ার ব্লকিং ডিটেকশন ও স্বয়ংক্রিয় ক্যাপচা ক্লিক সলভার
+                if "cloudflare" in raw_text.lower() or "just a moment" in raw_text.lower() or "security" in raw_text.lower():
+                    print("🛡️ Cloudflare challenge detected on API URL! Attempting bypass...")
                     try:
-                        # সাইলেন্ট মেসেজ (MUTE ON)
-                        bot.send_message(GROUP_ID, msg_body, parse_mode="HTML", reply_markup=markup, disable_notification=True)
-                        print(f"✅ PAID OTP Sent (Silent) >> {service_title} | Number: {exact_range}")
-                        time.sleep(2.5) 
-                    except Exception as e:
-                        if "Too Many Requests" in str(e):
-                            print("⏳ Telegram Anti-Spam! Pausing for 15 seconds...")
-                            time.sleep(15)
-                        else:
-                            print(f"❌ Telegram Error: {e}")
+                        driver.uc_gui_click_captcha()
+                        time.sleep(5)
+                    except:
+                        pass
+                    continue
+                    
+                # যদি সেশন এক্সপায়ার হয়ে লগইন পেজে নিয়ে যায় বা ডাটা ইনভ্যালিড হয়
+                if not raw_text.startswith("{") and not raw_text.startswith("["):
+                    print("🚨 API returned HTML Page instead of JSON! Session expired. Re-logging in...")
+                    logged_in = False
+                    try: driver.delete_all_cookies()
+                    except: pass
+                    time.sleep(5)
+                    continue
+                    
+                # ডাটা সফলভাবে পার্স করা
+                try:
+                    json_data = json.loads(raw_text)
+                except Exception as parse_err:
+                    print(f"🚨 JSON Parse Exception: {parse_err}. Raw text received: {raw_text[:150]}")
+                    time.sleep(6)
+                    continue
+                
+                # JSON Data Handle
+                if isinstance(json_data, dict):
+                    sms_list = json_data.get('data', [])
+                elif isinstance(json_data, list):
+                    sms_list = json_data
+                else:
+                    sms_list = []
+                    
+                if not sms_list or len(sms_list) == 0:
+                    if is_first_run:
+                        print("📭 Inbox is currently empty. Waiting peacefully for new OTPs...")
+                        is_first_run = False
+                    time.sleep(6)
+                    continue
+                    
+                # Forwarding OTPs
+                if is_first_run:
+                    print(f"📥 Found {len(sms_list)} OTPs in inbox. Forwarding them to the group...")
+                    is_first_run = False
+
+                for sms in reversed(sms_list):
+                    msg_id = str(sms.get('id', ''))
+                    
+                    service_raw = safe_text(sms.get('originator', sms.get('sender', 'Unknown')))
+                    term_data = sms.get('termination', {})
+                    raw_number = str(sms.get('number', sms.get('receiver', term_data.get('test_number', 'Unknown'))))
+                    full_text = safe_text(sms.get('messagedata', sms.get('message', 'No Text')))
+                    
+                    msg_signature = f"{raw_number}_{service_raw}_{full_text}"
+                    
+                    if msg_id and msg_id not in seen_messages and msg_signature not in seen_signatures:
+                        
+                        if len(seen_signatures) > 1000:
+                            seen_signatures.clear()
+                            seen_messages.clear()
                             
-            time.sleep(6) 
-            
-        except Exception as e:
-            print(f"🔥 Critical System Error! Self-healing in 10s... Details: {e}")
-            if driver:
-                try: driver.quit()
+                        seen_messages.add(msg_id)
+                        seen_signatures.add(msg_signature)
+                        
+                        country_info, exact_range = get_country_and_exact_range(raw_number, "")
+                        otp_code = extract_otp(full_text)
+                        service_title = service_raw.title()
+                        
+                        country_parts = country_info.split(' ')
+                        country_name = country_parts[0]
+                        flag = country_parts[1] if len(country_parts) > 1 else "🌐"
+
+                        # 🌟 RS OTP BOT STYLE DESIGN
+                        msg_body = (
+                            f"{flag} {country_name} {service_title} Otp Code Received Successfully 🎉\n\n"
+                            f"🔐 <b>Your OTP:</b> <code>{otp_code}</code>\n\n"
+                            f"☎️ <b>Number:</b> <code>{exact_range}</code>\n"
+                            f"⚙️ <b>Service:</b> {service_title}\n"
+                            f"🌍 <b>Country:</b> {country_info}\n\n"
+                            f"📩 <b>Full-Message:</b>\n"
+                            f"<code>{full_text}</code>"
+                        )
+                        
+                        markup = telebot.types.InlineKeyboardMarkup(row_width=2)
+                        markup.add(
+                            telebot.types.InlineKeyboardButton("🚀 Panel", url="https://t.me/"),
+                            telebot.types.InlineKeyboardButton("🛒 Buy IP", url="https://t.me/")
+                        )
+                        
+                        try:
+                            # সাইলেন্ট মেসেজ (MUTE ON)
+                            bot.send_message(GROUP_ID, msg_body, parse_mode="HTML", reply_markup=markup, disable_notification=True)
+                            print(f"✅ PAID OTP Sent (Silent) >> {service_title} | Number: {exact_range}")
+                            time.sleep(2.5) 
+                        except Exception as e:
+                            if "Too Many Requests" in str(e):
+                                print("⏳ Telegram Anti-Spam! Pausing for 15 seconds...")
+                                time.sleep(15)
+                            else:
+                                print(f"❌ Telegram Error: {e}")
+                                
+                time.sleep(6) 
+                
+            except Exception as e:
+                print(f"🔥 Critical System Error! Self-healing in 10s... Details: {e}")
+                logged_in = False
+                try: driver.delete_all_cookies()
                 except: pass
-                driver = None
-            time.sleep(10)
+                time.sleep(10)
 
 if __name__ == "__main__":
     print("🤖 Paid SMS Bot is turning on (Priyo Bot Login + Instant Delivery + Mute)...")
-    threading.Thread(target=monitor_ranges, daemon=True).start()
     
-    while True:
-        try:
-            bot.infinity_polling(timeout=20, long_polling_timeout=10, skip_pending=True)
-        except Exception:
-            time.sleep(3)
+    # 🚀 SMART FIX 4: টেলিগ্রাম বট-কে ব্যাকগ্রাউন্ড থ্রেডে পাঠিয়ে মূল থ্রেডে গ্রাফিক্স ও ক্রোম চালু রাখা
+    threading.Thread(target=lambda: bot.infinity_polling(timeout=20, long_polling_timeout=10, skip_pending=True), daemon=True).start()
+    
+    # মূল থ্রেড দিয়ে স্ক্রিপ্ট ও গ্রাফিক্স মনিটরিং করা হচ্ছে
+    monitor_ranges()
