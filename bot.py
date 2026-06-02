@@ -7,8 +7,7 @@ import html
 import urllib.parse
 import telebot
 import logging
-from datetime import datetime, timedelta
-import pytz
+from datetime import datetime, timedelta, timezone
 from seleniumbase import Driver
 
 telebot.logger.setLevel(logging.ERROR)
@@ -148,23 +147,24 @@ def extract_otp(full_text):
     return "N/A"
 
 # ==========================================
-# 📅 আজ এবং গতকালকের তারিখ ফিল্টারিং লজিক
+# 📅 আজ এবং গতকালকের তারিখ ফিল্টারিং লজিক (Pure Python)
 # ==========================================
 def is_today_or_yesterday(sms):
+    # গিটহাব রানার সার্ভার রান হয় UTC-তে। আমরা ম্যানুয়ালি ৬ ঘণ্টা যোগ করে বাংলাদেশ সময় হিসাব করছি
     try:
-        tz = pytz.timezone('Asia/Dhaka')
-        now = datetime.now(tz)
+        utc_now = datetime.now(timezone.utc)
+        now = utc_now + timedelta(hours=6)
     except Exception:
         now = datetime.now()
         
     yesterday = now - timedelta(days=1)
     
-    # সম্ভাব্য সব ধরনের ডেট ফরম্যাট জেনারেট করা
+    # সম্ভাব্য সব ডেট ফরম্যাট তৈরি করা
     today_formats = [now.strftime("%Y-%m-%d"), now.strftime("%d/%m/%Y"), now.strftime("%d-%m-%Y")]
     yesterday_formats = [yesterday.strftime("%Y-%m-%d"), yesterday.strftime("%d/%m/%Y"), yesterday.strftime("%d-%m-%Y")]
     allowed_dates = today_formats + yesterday_formats
     
-    # এপিআই রেসপন্সের বিভিন্ন ফিল্ডে চেক করা
+    # এপিআই রেসপন্সের বিভিন্ন ডেট কি (Keys) পরীক্ষা করা
     possible_keys = ['created_at', 'updated_at', 'received_at', 'time', 'date', 'datetime', 'timestamp']
     for key in possible_keys:
         val = sms.get(key)
@@ -174,14 +174,14 @@ def is_today_or_yesterday(sms):
                 if d_str in val_str:
                     return True
                     
-    # যদি কোনো নির্দিষ্ট ফিল্ড না মেলে, তবে অন্য ডেটা টেক্সট চেক করা
+    # কোনো নির্দিষ্ট ডেট ফিল্ড না মিললে টেক্সট ফিল্ডগুলো স্ক্রিন করা
     for k, v in sms.items():
         if isinstance(v, str):
             for d_str in allowed_dates:
                 if d_str in v:
                     return True
                     
-    # ফলব্যাক হিসেবে প্রথমবার সব ডেটাই গ্রহণ করা যাতে কোনো জরুরি ওটিপি মিস না হয়
+    # ওটিপি মিস হওয়া ঠেকাতে কোনো ম্যাচ না পেলেও এটি ডিফল্ট হিসেবে True রিটার্ন করবে
     return True
 
 # ==========================================
@@ -255,8 +255,7 @@ def monitor_ranges():
             
             while error_count < 10:
                 try:
-                    # ⚠️ ব্রাউজার সেশনের ভেতর থেকেই সরাসরি জাভাস্ক্রিপ্ট কল রান করা হচ্ছে
-                    # এটি ক্লাউডফ্লেয়ার কোনোভাবেই ব্লক করতে পারবে না
+                    # ব্রাউজার থেকে সরাসরি জাভাস্ক্রিপ্ট দিয়ে এপিআই কল হচ্ছে (যাতে ক্লাউডফ্লেয়ার ব্লক করতে না পারে)
                     script = """
                     return fetch('https://www.ivasms.com/portal/sms/received/getsms/number/sms')
                         .then(response => {
@@ -281,7 +280,7 @@ def monitor_ranges():
                             raw_number = str(term_data.get('test_number', sms.get('test_number', 'Unknown')))
                             full_text = safe_text(sms.get('messagedata', 'No Text'))
                             
-                            # প্রথমবার চালুর সময় শুধু আজকের এবং গতকালকের মেসেজ গ্রুপে যাবে
+                            # প্রথম চালুর সময় শুধু আজকের এবং গতকালকের ওটিপি ফিল্টার হবে
                             if is_first_run:
                                 if not is_today_or_yesterday(sms):
                                     continue
@@ -304,7 +303,6 @@ def monitor_ranges():
                                 country_name = country_parts[0]
                                 flag = country_parts[1] if len(country_parts) > 1 else "🌐"
 
-                                # ডিজাইন এবং বাটন লেআউট হুবহু অপরিবর্তিত রাখা হয়েছে
                                 msg_body = (
                                     f"{flag} {country_name} {service_title} Otp Code Received Successfully 🎉\n\n"
                                     f"🔐 <b>Your OTP:</b> <code>{otp_code}</code>\n\n"
@@ -332,7 +330,7 @@ def monitor_ranges():
                             print("📥 Startup sync complete! Today's and Yesterday's OTPs sent.")
                             is_first_run = False
                             
-                        error_count = 0  # সফল স্ক্যানে এরর কাউন্টার শূন্য হবে
+                        error_count = 0 
                         
                     else:
                         print("🚨 Empty API data, retrying...")
@@ -342,7 +340,7 @@ def monitor_ranges():
                     print(f"⚠️ Fetch Error: {e}")
                     error_count += 1
                     
-                time.sleep(5) # প্রতি ৫ সেকেন্ড পরপর ইনবক্স স্ক্যান করবে
+                time.sleep(5) # প্রতি ৫ সেকেন্ডে চেক করবে
                 
             print("🔄 Closing browser session to refresh connection and re-login...")
             if driver:
