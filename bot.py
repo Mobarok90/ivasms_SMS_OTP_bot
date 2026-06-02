@@ -166,6 +166,8 @@ def monitor_ranges():
     global is_first_run, seen_messages, seen_signatures
     
     driver = None
+    xsrf_token = ""
+    
     while True:
         try:
             # সেশনটি না থাকলে অথবা ড্রাইভার ক্র্যাশ করলে পুনরায় ব্রাউজার রান করে লগইন করবে
@@ -178,9 +180,6 @@ def monitor_ranges():
                 try: driver.get("https://www.ivasms.com/login")
                 except: pass
                 
-                try: driver.uc_gui_click_captcha(); time.sleep(2)
-                except: pass
-                
                 print("⏳ Waiting for Email Field...")
                 driver.wait_for_element('input[name="email"]', timeout=30)
                 
@@ -188,75 +187,93 @@ def monitor_ranges():
                 driver.type('input[name="email"]', EMAIL)
                 driver.type('input[name="password"]', PASSWORD)
                 
-                print("⏳ Waiting 8 seconds for Turnstile to auto-resolve...")
-                time.sleep(8)
+                # 🚀 SMART FIX 1: ক্লাউডফ্লেয়ার টার্নস্টাইল টোকেন জেনারেট হওয়ার জন্য অপেক্ষা করা
+                print("⏳ Waiting for Cloudflare Turnstile token to generate...")
+                turnstile_solved = False
+                for _ in range(35):
+                    # cf-turnstile-response ফিল্ডে টোকেন এসেছে কি না চেক করা
+                    token = driver.execute_script("return document.querySelector('[name=cf-turnstile-response]') ? document.querySelector('[name=cf-turnstile-response]').value : ''")
+                    if token and len(token) > 10:
+                        print("✅ Cloudflare Turnstile Solved Successfully!")
+                        turnstile_solved = True
+                        break
+                    time.sleep(1)
                 
-                print("🤖 Attempting to click Turnstile just in case...")
-                try: driver.uc_gui_click_captcha(); time.sleep(3)
-                except: pass
+                if not turnstile_solved:
+                    print("🤖 Auto-solve took too long. Attempting manual click on Turnstile...")
+                    try: driver.uc_gui_click_captcha(); time.sleep(3)
+                    except: pass
                 
                 print("🖱️ Clicking Login Submit Button...")
                 try: driver.uc_click('button[type="submit"]')
                 except: driver.click('button[type="submit"]')
                     
                 print("⏳ Waiting to reach the dashboard...")
-                timeout_counter = 40
-                while "login" in driver.current_url and timeout_counter > 0:
+                success = False
+                for _ in range(25):
+                    current_url = driver.current_url
+                    # নিশ্চিত করা হচ্ছে যে পেজটি সফলভাবে ড্যাশবোর্ডে গিয়েছে এবং লগইন পেজে আটকে নেই
+                    if "/portal" in current_url and "login" not in current_url:
+                        success = True
+                        break
                     time.sleep(1)
-                    timeout_counter -= 1
                     
-                if "login" in driver.current_url:
-                    print("❌ Login Failed! Cloudflare blocked or wrong password. Retrying in 30 seconds...")
+                if not success:
+                    print(f"❌ Login Failed! Currently stuck at URL: {driver.current_url}. Retrying login...")
                     try: driver.quit()
                     except: pass
                     driver = None
-                    time.sleep(30)
+                    time.sleep(15)
                     continue
                     
-                print("✅ Dashboard Reached! Letting cookies settle for 5 seconds...")
+                print("✅ Dashboard Reached Successfully! Letting cookies settle...")
                 time.sleep(5) 
                 
-                # 🚀 SMART FIX 1: সরাসরি এসএমএস পোর্টাল পেজে ন্যাভিগেট করা
+                # সরাসরি এসএমএস রিসিভড পোর্টাল পেজে চলে যাওয়া
                 print("🌍 Navigating explicitly to the SMS received portal...")
                 try:
                     driver.get("https://www.ivasms.com/portal/sms/received")
                     time.sleep(5)
                 except Exception as ex:
                     print(f"⚠️ Navigation warning: {ex}")
+                
+                # 🚀 SMART FIX 2: পাইথন সেলেনিয়াম থেকে ডাইরেক্ট কুকি বের করে রাখা
+                cookies = driver.get_cookies()
+                for c in cookies:
+                    if c['name'] == 'XSRF-TOKEN':
+                        xsrf_token = urllib.parse.unquote(c['value'])
+                        break
+                print(f"🔑 XSRF-TOKEN Loaded: {xsrf_token[:15]}...")
             
             print("⚡ Scanning Paid Inbox for new OTPs using Selenium fetch...")
             
-            # 🚀 SMART FIX 2: XSRF-TOKEN এবং XMLHttpRequest হেডারসহ অ্যাজাক্স কল করা
-            js_script = """
-            const getCookie = (name) => {
-                const value = `; ${document.cookie}`;
-                const parts = value.split(`; ${name}=`);
-                if (parts.length === 2) return decodeURIComponent(parts.pop().split(';').shift());
-                return '';
-            };
-            const xsrfToken = getCookie('XSRF-TOKEN');
-            
-            return fetch(window.location.origin + '/portal/live/my_sms', {
+            # 🚀 SMART FIX 3: নিরাপদ AJAX ফেচ রিকোয়েস্ট (যা সরাসরি স্ট্যাটাস ও রেসপন্স টেক্সট পাইথনে পাস করবে)
+            js_script = f"""
+            const xsrfToken = "{xsrf_token}";
+            return fetch(window.location.origin + '/portal/live/my_sms', {{
                 method: 'GET',
-                headers: {
+                headers: {{
                     'Accept': 'application/json, text/javascript, */*; q=0.01',
                     'X-Requested-With': 'XMLHttpRequest',
                     'X-XSRF-TOKEN': xsrfToken
-                }
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('HTTP status ' + response.status);
-                }
-                return response.json();
-            })
-            .catch(err => {
-                return { error: err.message };
-            });
+                }}
+            }})
+            .then(response => {{
+                return response.text().then(text => {{
+                    return {{
+                        status: response.status,
+                        contentType: response.headers.get('content-type') || '',
+                        text: text
+                    }};
+                }});
+            }})
+            .catch(err => {{
+                return {{ error: err.message }};
+            }});
             """
             
             try:
-                json_data = driver.execute_script(js_script)
+                result_data = driver.execute_script(js_script)
             except Exception as js_err:
                 print(f"⚠️ Driver lost or crashed: {js_err}. Restarting driver...")
                 try: driver.quit()
@@ -265,17 +282,41 @@ def monitor_ranges():
                 time.sleep(10)
                 continue
                 
-            # যদি এপিআই কল করার সময় কোনো এরর আসে (যেমন সেশন শেষ হওয়া)
-            if isinstance(json_data, dict) and "error" in json_data:
-                error_msg = json_data["error"]
-                print(f"🚨 API fetch failed: {error_msg}")
-                # সেশন এক্সপায়ার হলে বা সেশন ড্যামেজ হলে ব্রাউজার রিসেট করে পুনরায় লগইন করবে
-                if "401" in error_msg or "403" in error_msg or "419" in error_msg or "status 0" in error_msg:
-                    print("🔄 Session expired or Cloudflare block detected. Restarting login flow...")
-                    try: driver.quit()
-                    except: pass
-                    driver = None
-                time.sleep(10)
+            # যদি এপিআই কল করার সময় কোনো এরর আসে
+            if isinstance(result_data, dict) and "error" in result_data:
+                print(f"🚨 JS Fetch Error: {result_data['error']}")
+                time.sleep(6)
+                continue
+                
+            status_code = result_data.get("status", 0)
+            content_type = result_data.get("contentType", "")
+            raw_text = result_data.get("text", "")
+            
+            # সেশন ড্যামেজ হলে বা অন্য কোনো কারণে নন-২০০ কোড আসলে
+            if status_code != 200:
+                print(f"🚨 API returned non-200 status code: {status_code}. Session must be expired!")
+                try: driver.quit()
+                except: pass
+                driver = None
+                time.sleep(5)
+                continue
+                
+            # 🚀 SMART FIX 4: এইচটিএমএল বা লগইন পেজে রিডাইরেকশন ডিটেকশন (সেলফ-হিলিং)
+            if "html" in content_type.lower() or raw_text.strip().startswith("<!DOCTYPE") or raw_text.strip().startswith("<html"):
+                print("🚨 API returned HTML Page instead of JSON! Re-login needed.")
+                print("🔄 Restarting login flow dynamically...")
+                try: driver.quit()
+                except: pass
+                driver = None
+                time.sleep(5)
+                continue
+                
+            # ডাটা পার্স করা
+            try:
+                json_data = json.loads(raw_text)
+            except Exception as parse_err:
+                print(f"🚨 JSON Parse Exception: {parse_err}. Retrying in next scan...")
+                time.sleep(6)
                 continue
                 
             # JSON Data Handle
