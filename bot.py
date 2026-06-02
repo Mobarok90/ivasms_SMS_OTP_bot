@@ -5,12 +5,11 @@ import re
 import threading
 import html
 import urllib.parse
-from datetime import datetime
 import telebot
+import cloudscraper
 import logging
 from seleniumbase import Driver
 
-# টেলিগ্রামের ফালতু এরর লগ বন্ধ করা হলো
 telebot.logger.setLevel(logging.ERROR)
 
 # ==========================================
@@ -24,13 +23,15 @@ PASSWORD = os.getenv("PASSWORD")
 GROUP_ID = "-1003871481057"
 USER_BOT_USERNAME = "YourOTPBot"
 
+# ⚠️ MASTER INBOX API (আপনার পেইড ইনবক্সের লাইভ ওটিপি)
+API_URL = "https://www.ivasms.com/portal/live/my_sms"
+
 # ==========================================
 # 🎯 SERVICE FILTERS & LOGOS
 # ==========================================
 SERVICE_LOGOS = {
     "WHATSAPP": "🟢 WhatsApp", "FACEBOOK": "📘 Facebook", "TELEGRAM": "✈️ Telegram",
-    "TIKTOK": "🎵 TikTok", "GOOGLE": "🔴 Google", "VIBER": "🟪 Viber", "MICROSOFT": "🪟 Microsoft",
-    "SHEIN": "👗 SHEIN", "HUAWEI": "🟥 Huawei"
+    "TIKTOK": "🎵 TikTok", "GOOGLE": "🔴 Google"
 }
 ALLOWED_SERVICES = list(SERVICE_LOGOS.keys())
 BLOCKED_SERVICES = ["TIKTOKADS"] 
@@ -144,7 +145,6 @@ def get_country_and_exact_range(number, range_text=""):
             country_name = ' '.join(letters_only).title()
             if country_name.lower() != "active": 
                 country_info = f"{country_name} 🏳️"
-                
     return country_info, exact_range
 
 def safe_text(text):
@@ -164,118 +164,143 @@ def extract_otp(full_text):
     return "N/A"
 
 # ==========================================
-# 🤖 AI CORE: 24/7 BROWSER AUTOMATION (VIDEO LOGIC)
+# 🌐 STEP 1: AUTO-LOGIN (PRIYO BOT EXACT STYLE)
 # ==========================================
-def run_smart_bot():
-    global is_first_run, seen_messages, seen_signatures
+def get_fresh_cookies():
+    print("🚀 Launching invisible Browser to login to Paid Account...")
     driver = None
+    try:
+        driver = Driver(uc=True, headless=False)
+        driver.set_page_load_timeout(60)
+        
+        print("🔐 Navigating to iVASMS login...")
+        try: driver.get("https://www.ivasms.com/login")
+        except: pass
+        
+        try: driver.uc_gui_click_captcha(); time.sleep(2)
+        except: pass
+        
+        print("⏳ Waiting for Email Field...")
+        driver.wait_for_element('input[name="email"]', timeout=30)
+        
+        print("✅ CF bypassed! Entering credentials...")
+        driver.type('input[name="email"]', EMAIL)
+        driver.type('input[name="password"]', PASSWORD)
+        
+        print("⏳ Waiting 8 seconds for Turnstile to auto-resolve...")
+        time.sleep(8)
+        
+        print("🤖 Attempting to click Turnstile just in case...")
+        try: driver.uc_gui_click_captcha(); time.sleep(3)
+        except: pass
+        
+        print("🖱️ Clicking Login Submit Button...")
+        try: driver.uc_click('button[type="submit"]')
+        except: driver.click('button[type="submit"]')
+            
+        print("⏳ Waiting to reach the dashboard...")
+        timeout_counter = 40
+        while "login" in driver.current_url and timeout_counter > 0:
+            time.sleep(1)
+            timeout_counter -= 1
+            
+        if "login" in driver.current_url:
+            print("❌ Login Failed! Cloudflare blocked or wrong password.")
+            driver.quit()
+            return None, None, None
+            
+        print("✅ Dashboard Reached! Letting cookies settle for 5 seconds...")
+        time.sleep(5) 
+        
+        cookies = driver.get_cookies()
+        user_agent = driver.execute_script("return navigator.userAgent;")
+        
+        cookie_dict = {}
+        xsrf_token = ""
+        for c in cookies:
+            cookie_dict[c['name']] = c['value']
+            if c['name'] == 'XSRF-TOKEN':
+                xsrf_token = urllib.parse.unquote(c['value'])
+        
+        print("🍪 Fresh Authenticated Cookies Grabbed!")
+        driver.quit() 
+        return cookie_dict, user_agent, xsrf_token
+        
+    except Exception as e:
+        print(f"❌ Failed to grab cookies: {e}")
+        if driver:
+            try: driver.quit()
+            except: pass
+        return None, None, None
+
+# ==========================================
+# 📡 STEP 2: 24/7 INBOX SCANNING (PAID SMS)
+# ==========================================
+def monitor_ranges():
+    global is_first_run, seen_messages, seen_signatures
     
     while True:
         try:
-            print("🚀 Booting up invisible AI Browser (Stealth Mode)...")
-            driver = Driver(uc=True, headless=False)
-            driver.set_page_load_timeout(60)
+            cookie_dict, user_agent, xsrf_token = get_fresh_cookies()
             
-            # 1. Login Process with Smart Reconnect
-            print("🔐 Navigating to iVASMS login...")
-            driver.uc_open_with_reconnect("https://www.ivasms.com/login", 5)
-            time.sleep(4)
-            
-            # ⚠️ AI ByPass Logic: Check if Email box is missing (Hard Cloudflare)
-            if not driver.is_element_visible('input[name="email"]'):
-                print("🛡️ Cloudflare Shield detected. Forcing auto-resolve...")
-                try: driver.uc_gui_click_captcha(); time.sleep(4)
-                except: pass
-                
-                # If still blocked, reconnect again
-                if not driver.is_element_visible('input[name="email"]'):
-                    print("🔄 Retrying CF Bypass...")
-                    driver.uc_open_with_reconnect("https://www.ivasms.com/login", 5)
-                    time.sleep(4)
-            
-            # Now wait for Email safely
-            print("⏳ Waiting for Email Field...")
-            driver.wait_for_element('input[name="email"]', timeout=20)
-            
-            print("✅ CF bypassed! Entering credentials...")
-            driver.type('input[name="email"]', EMAIL)
-            driver.type('input[name="password"]', PASSWORD)
-            time.sleep(1)
-            
-            print("🖱️ Clicking Login Button...")
-            try: driver.uc_click('button[type="submit"]')
-            except: driver.click('button[type="submit"]')
-                
-            print("⏳ Waiting for Dashboard to load...")
-            timeout_counter = 30
-            while "login" in driver.current_url and timeout_counter > 0:
-                time.sleep(1)
-                timeout_counter -= 1
-                
-            if "login" in driver.current_url:
-                print("❌ Login Failed! Restarting process to trick CF...")
-                driver.quit()
-                time.sleep(10)
+            if not cookie_dict:
+                print("🔄 Auto-Login failed. Retrying in 30 seconds...")
+                time.sleep(30)
                 continue
                 
-            print("✅ Login Successful! Moving to 'My SMS' Page...")
+            print("⚡ Scanning Paid Inbox for new OTPs...")
+            scraper = cloudscraper.create_scraper()
+            scraper.cookies.update(cookie_dict)
             
-            # 2. Navigate to the exact page shown in your video
-            driver.get("https://www.ivasms.com/portal/sms/received")
-            time.sleep(5) 
+            headers = {
+                "User-Agent": user_agent,
+                "Accept": "application/json, text/javascript, */*; q=0.01",
+                "X-Requested-With": "XMLHttpRequest", 
+                "X-XSRF-TOKEN": xsrf_token,
+                "Origin": "https://www.ivasms.com",
+                "Referer": "https://www.ivasms.com/portal/sms/received"
+            }
             
-            print("📡 Starting 24/7 Paid OTP Scanning Loop...")
+            error_count = 0
             
-            # 3. Inject JS to fetch data (The Video Logic Method)
-            fetch_script = """
-            var callback = arguments[arguments.length - 1];
-            var csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', 'https://www.ivasms.com/portal/sms/received/getsms', true);
-            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
-            xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-            xhr.setRequestHeader('X-CSRF-TOKEN', csrf);
-            xhr.onreadystatechange = function() {
-                if (xhr.readyState == 4) {
-                    callback({status: xhr.status, text: xhr.responseText});
-                }
-            };
-            var today = new Date().toISOString().split('T')[0];
-            xhr.send('start=' + today + '&end=' + today);
-            """
-            
-            driver.set_script_timeout(30)
-            error_streak = 0
-            
-            # Inner scanning loop
-            while error_streak < 5:
+            while error_count < 5:
                 try:
-                    result = driver.execute_async_script(fetch_script)
-                    status = result.get('status')
-                    response_text = result.get('text')
+                    response = scraper.get(API_URL, headers=headers, timeout=15)
                     
-                    if status == 200:
+                    if response.status_code == 200:
                         try:
-                            json_data = json.loads(response_text)
+                            json_data = response.json()
                         except ValueError:
-                            if "No SMS found" in response_text or "sms-empty" in response_text:
+                            if "No SMS found" in response.text or "sms-empty" in response.text:
                                 if is_first_run:
-                                    print("📭 Inbox is currently empty. Waiting for new OTPs...")
+                                    print("📭 Inbox is currently empty. Waiting peacefully for new OTPs...")
                                     is_first_run = False
-                                error_streak = 0
+                                error_count = 0
                                 time.sleep(6)
                                 continue
                             else:
-                                print(f"🚨 Received unexpected HTML. Refreshing page...")
-                                driver.refresh()
-                                time.sleep(5)
-                                error_streak += 1
-                                continue
-                                
-                        sms_list = json_data.get('data', [])
-                        
+                                print(f"🚨 API returned HTML instead of JSON. Waiting and retrying...")
+                                break 
+                            
+                        # JSON Data Handle
+                        if isinstance(json_data, dict):
+                            sms_list = json_data.get('data', [])
+                        elif isinstance(json_data, list):
+                            sms_list = json_data
+                        else:
+                            sms_list = []
+                            
+                        if not sms_list or len(sms_list) == 0:
+                            if is_first_run:
+                                print("📭 Inbox is currently empty. Waiting peacefully for new OTPs...")
+                                is_first_run = False
+                            error_count = 0
+                            time.sleep(6)
+                            continue
+                            
+                        # ⚠️ UPDATE: Start forwarding immediately (Even first run OTPs)
                         if is_first_run:
-                            print(f"📥 Found {len(sms_list)} old OTPs in inbox. Forwarding them now...")
+                            print(f"📥 Found {len(sms_list)} OTPs in inbox. Forwarding them to the group...")
                             is_first_run = False
 
                         for sms in reversed(sms_list):
@@ -323,41 +348,40 @@ def run_smart_bot():
                                 )
                                 
                                 try:
-                                    # ⚠️ SIlent Message (disable_notification=True)
+                                    # ⚠️ সাইলেন্ট মেসেজ (MUTE ON)
                                     bot.send_message(GROUP_ID, msg_body, parse_mode="HTML", reply_markup=markup, disable_notification=True)
-                                    print(f"✅ PAID OTP Sent >> {service_title} | Number: {exact_range}")
+                                    print(f"✅ PAID OTP Sent (Silent) >> {service_title} | Number: {exact_range}")
                                     time.sleep(2.5) 
                                 except Exception as e:
-                                    print(f"❌ Telegram Error: {e}")
+                                    if "Too Many Requests" in str(e):
+                                        print("⏳ Telegram Anti-Spam! Pausing for 15 seconds...")
+                                        time.sleep(15)
+                                    else:
+                                        print(f"❌ Telegram Error: {e}")
                                     
-                        error_streak = 0 
+                        error_count = 0 
                         
-                    elif status in [401, 403, 419]:
-                        print(f"🚨 Session Expired (Code {status}). Breaking loop to re-login...")
+                    elif response.status_code in [401, 403, 419]:
+                        print(f"🚨 Session Expired (Code {response.status_code}). Restarting auto-login...")
                         break 
                     else:
-                        error_streak += 1
-                        print(f"⚠️ API Error {status}. Retrying...")
-                        
+                        error_count += 1
+                            
                 except Exception as e:
-                    print(f"⚠️ Script Execution Error: {e}")
-                    error_streak += 1
+                    print(f"⚠️ Fetch Error: {e}")
+                    error_count += 1
                     
                 time.sleep(5) 
                 
-            print("🔄 Browser Session lost. Restarting the whole process...")
-            driver.quit()
+            print("🔄 Connection lost or Session expired. Going back to Steal Cookies...")
             
         except Exception as e:
             print(f"🔥 Critical System Error! Self-healing in 10s... Details: {e}")
-            if driver:
-                try: driver.quit()
-                except: pass
             time.sleep(10)
 
 if __name__ == "__main__":
-    print("🤖 Paid SMS Bot is turning on (Ultimate Anti-Block Version!)...")
-    threading.Thread(target=run_smart_bot, daemon=True).start()
+    print("🤖 Paid SMS Bot is turning on (Priyo Bot Login + Instant Delivery + Mute)...")
+    threading.Thread(target=monitor_ranges, daemon=True).start()
     
     while True:
         try:
