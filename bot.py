@@ -23,8 +23,8 @@ PASSWORD = os.getenv("PASSWORD")
 GROUP_ID = "-1003871481057"
 USER_BOT_USERNAME = "YourOTPBot"
 
-# আপনার দেওয়া পেইড ইনবক্সের API
-API_URL = "https://www.ivasms.com/portal/sms/received/getsms"
+# ⚠️ MASTER INBOX API (এটি আপনার পেইড ইনবক্সের লাইভ ওটিপি আনবে)
+API_URL = "https://www.ivasms.com/portal/live/my_sms"
 
 # ==========================================
 # 🎯 SERVICE FILTERS & LOGOS
@@ -43,17 +43,65 @@ COUNTRY_DICT = {
     "1": ("USA/Canada", "🇺🇸/🇨🇦"), "7": ("Russia/KZ", "🇷🇺/🇰🇿"), "20": ("Egypt", "🇪🇬"), 
     "27": ("South Africa", "🇿🇦"), "30": ("Greece", "🇬🇷"), "31": ("Netherlands", "🇳🇱"), 
     "32": ("Belgium", "🇧🇪"), "33": ("France", "🇫🇷"), "34": ("Spain", "🇪🇸"), 
-    "39": ("Italy", "🇮🇹"), "44": ("UK", "🇬🇧"), "49": ("Germany", "🇩🇪"), 
-    "51": ("Peru", "🇵🇪"), "52": ("Mexico", "🇲🇽"), "54": ("Argentina", "🇦🇷"), 
-    "55": ("Brazil", "🇧🇷"), "57": ("Colombia", "🇨🇴"), "60": ("Malaysia", "🇲🇾"), 
-    "62": ("Indonesia", "🇮🇩"), "63": ("Philippines", "🇵🇭"), "66": ("Thailand", "🇹🇭"), 
+    "36": ("Hungary", "🇭🇺"), "39": ("Italy", "🇮🇹"), "40": ("Romania", "🇷🇴"), 
+    "41": ("Switzerland", "🇨🇭"), "42": ("Czech/Slovakia", "🇨🇿/🇸🇰"), "43": ("Austria", "🇦🇹"), 
+    "44": ("UK", "🇬🇧"), "45": ("Denmark", "🇩🇰"), "46": ("Sweden", "🇸🇪"), 
+    "47": ("Norway", "🇳🇴"), "48": ("Poland", "🇵🇱"), "49": ("Germany", "🇩🇪"), 
+    "51": ("Peru", "🇵🇪"), "52": ("Mexico", "🇲🇽"), "53": ("Cuba", "🇨🇺"), 
+    "54": ("Argentina", "🇦🇷"), "55": ("Brazil", "🇧🇷"), "56": ("Chile", "🇨🇱"), 
+    "57": ("Colombia", "🇨🇴"), "58": ("Venezuela", "🇻🇪"), "60": ("Malaysia", "🇲🇾"), 
+    "61": ("Australia", "🇦🇺"), "62": ("Indonesia", "🇮🇩"), "63": ("Philippines", "🇵🇭"), 
+    "64": ("New Zealand", "🇳🇿"), "65": ("Singapore", "🇸🇬"), "66": ("Thailand", "🇹🇭"), 
     "81": ("Japan", "🇯🇵"), "82": ("South Korea", "🇰🇷"), "84": ("Vietnam", "🇻🇳"), 
     "86": ("China", "🇨🇳"), "90": ("Turkey", "🇹🇷"), "91": ("India", "🇮🇳"), 
-    "92": ("Pakistan", "🇵🇰"), "93": ("Afghanistan", "🇦🇫"), "98": ("Iran", "🇮🇷"), 
-    "212": ("Morocco", "🇲🇦"), "234": ("Nigeria", "🇳🇬"), "249": ("Sudan", "🇸🇩"), 
-    "251": ("Ethiopia", "🇪🇹"), "254": ("Kenya", "🇰🇪"), "351": ("Portugal", "🇵🇹"), 
-    "380": ("Ukraine", "🇺🇦"), "880": ("Bangladesh", "🇧🇩"), "966": ("Saudi Arabia", "🇸🇦"), 
-    "971": ("UAE", "🇦🇪"), "998": ("Uzbekistan", "🇺🇿")
+    "92": ("Pakistan", "🇵🇰"), "93": ("Afghanistan", "🇦🇫"), "94": ("Sri Lanka", "🇱🇰"), 
+    "95": ("Myanmar", "🇲🇲"), "98": ("Iran", "🇮🇷"), "211": ("South Sudan", "🇸🇸"), 
+    "212": ("Morocco", "🇲🇦"), "213": ("Algeria", "🇩🇿"), "216": ("Tunisia", "🇹🇳"), 
+    "218": ("Libya", "🇱🇾"), "220": ("Gambia", "🇬🇲"), "221": ("Senegal", "🇸🇳"), 
+    "222": ("Mauritania", "🇲🇷"), "223": ("Mali", "🇲🇱"), "224": ("Guinea", "🇬🇳"), 
+    "225": ("Ivory Coast", "🇨🇮"), "226": ("Burkina Faso", "🇧🇫"), "227": ("Niger", "🇳🇪"), 
+    "228": ("Togo", "🇹🇬"), "229": ("Benin", "🇧🇯"), "230": ("Mauritius", "🇲🇺"), 
+    "231": ("Liberia", "🇱🇷"), "232": ("Sierra Leone", "🇸🇱"), "233": ("Ghana", "🇬🇭"), 
+    "234": ("Nigeria", "🇳🇬"), "235": ("Chad", "🇹🇩"), "236": ("CAR", "🇨🇫"), 
+    "237": ("Cameroon", "🇨🇲"), "238": ("Cape Verde", "🇨🇻"), "239": ("Sao Tome", "🇸🇹"), 
+    "240": ("Equatorial Guinea", "🇬🇶"), "241": ("Gabon", "🇬🇦"), "242": ("Congo", "🇨🇬"), 
+    "243": ("DR Congo", "🇨🇩"), "244": ("Angola", "🇦🇴"), "245": ("Guinea-Bissau", "🇬🇼"), 
+    "246": ("Diego Garcia", "🇮🇴"), "248": ("Seychelles", "🇸🇨"), "249": ("Sudan", "🇸🇩"), 
+    "250": ("Rwanda", "🇷🇼"), "251": ("Ethiopia", "🇪🇹"), "252": ("Somalia", "🇸🇴"), 
+    "253": ("Djibouti", "🇩🇯"), "254": ("Kenya", "🇰🇪"), "255": ("Tanzania", "🇹🇿"), 
+    "256": ("Uganda", "🇺🇬"), "257": ("Burundi", "🇧🇮"), "258": ("Mozambique", "🇲🇿"), 
+    "260": ("Zambia", "🇿🇲"), "261": ("Madagascar", "🇲🇬"), "262": ("Reunion", "🇷🇪"), 
+    "263": ("Zimbabwe", "🇿🇼"), "264": ("Namibia", "🇳🇦"), "265": ("Malawi", "🇲🇼"), 
+    "266": ("Lesotho", "🇱🇸"), "267": ("Botswana", "🇧🇼"), "268": ("Eswatini", "🇸🇿"), 
+    "269": ("Comoros", "🇰🇲"), "290": ("St Helena", "🇸🇭"), "291": ("Eritrea", "🇪🇷"), 
+    "297": ("Aruba", "🇦🇼"), "298": ("Faroe Islands", "🇫🇴"), "299": ("Greenland", "🇬🇱"), 
+    "350": ("Gibraltar", "🇬🇮"), "351": ("Portugal", "🇵🇹"), "352": ("Luxembourg", "🇱🇺"), 
+    "353": ("Ireland", "🇮🇪"), "354": ("Iceland", "🇮🇸"), "355": ("Albania", "🇦🇱"), 
+    "356": ("Malta", "🇲🇹"), "357": ("Cyprus", "🇨🇾"), "358": ("Finland", "🇫🇮"), 
+    "359": ("Bulgaria", "🇧🇬"), "370": ("Lithuania", "🇱🇹"), "371": ("Latvia", "🇱🇻"), 
+    "372": ("Estonia", "🇪🇪"), "373": ("Moldova", "🇲🇩"), "374": ("Armenia", "🇦🇲"), 
+    "375": ("Belarus", "🇧🇾"), "376": ("Andorra", "🇦🇩"), "377": ("Monaco", "🇲🇨"), 
+    "378": ("San Marino", "🇸🇲"), "379": ("Vatican City", "🇻🇦"), "380": ("Ukraine", "🇺🇦"), 
+    "381": ("Serbia", "🇷🇸"), "382": ("Montenegro", "🇲🇪"), "383": ("Kosovo", "🇽🇰"), 
+    "385": ("Croatia", "🇭🇷"), "386": ("Slovenia", "🇸🇮"), "387": ("Bosnia", "🇧🇦"), 
+    "389": ("North Macedonia", "🇲🇰"), "420": ("Czechia", "🇨🇿"), "421": ("Slovakia", "🇸🇰"), 
+    "423": ("Liechtenstein", "🇱🇮"), "500": ("Falkland", "🇫🇰"), "501": ("Belize", "🇧🇿"), 
+    "502": ("Guatemala", "🇬🇹"), "503": ("El Salvador", "🇸🇻"), "504": ("Honduras", "🇭🇳"), 
+    "505": ("Nicaragua", "🇳🇮"), "506": ("Costa Rica", "🇨🇷"), "507": ("Panama", "🇵🇦"), 
+    "508": ("St Pierre", "🇵🇲"), "509": ("Haiti", "🇭🇹"), "590": ("Guadeloupe", "🇬🇵"), 
+    "591": ("Bolivia", "🇧🇴"), "592": ("Guyana", "🇬🇾"), "593": ("Ecuador", "🇪🇨"), 
+    "594": ("French Guiana", "🇬🇫"), "595": ("Paraguay", "🇵🇾"), "596": ("Martinique", "🇲🇶"), 
+    "597": ("Suriname", "🇸🇷"), "598": ("Uruguay", "🇺🇾"), "599": ("Curacao", "🇨🇼"), 
+    "850": ("North Korea", "🇰🇵"), "852": ("Hong Kong", "🇭🇰"), "853": ("Macau", "🇲🇴"), 
+    "855": ("Cambodia", "🇰🇭"), "856": ("Laos", "🇱🇦"), "880": ("Bangladesh", "🇧🇩"), 
+    "886": ("Taiwan", "🇹🇼"), "960": ("Maldives", "🇲🇻"), "961": ("Lebanon", "🇱🇧"), 
+    "962": ("Jordan", "🇯🇴"), "963": ("Syria", "🇸🇾"), "964": ("Iraq", "🇮🇶"), 
+    "965": ("Kuwait", "🇰🇼"), "966": ("Saudi Arabia", "🇸🇦"), "967": ("Yemen", "🇾🇪"), 
+    "968": ("Oman", "🇴🇲"), "970": ("Palestine", "🇵🇸"), "971": ("UAE", "🇦🇪"), 
+    "972": ("Israel", "🇮🇱"), "973": ("Bahrain", "🇧🇭"), "974": ("Qatar", "🇶🇦"), 
+    "975": ("Bhutan", "🇧🇹"), "976": ("Mongolia", "🇲🇳"), "977": ("Nepal", "🇳🇵"), 
+    "992": ("Tajikistan", "🇹🇯"), "993": ("Turkmenistan", "🇹🇲"), "994": ("Azerbaijan", "🇦🇿"), 
+    "995": ("Georgia", "🇬🇪"), "996": ("Kyrgyzstan", "🇰🇬"), "998": ("Uzbekistan", "🇺🇿")
 }
 
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -95,8 +143,7 @@ def get_country_and_exact_range(number, range_text):
         letters_only = re.findall(r'[A-Za-z]+', str(range_text))
         if letters_only:
             country_name = ' '.join(letters_only).title()
-            if country_name.lower() != "active": 
-                country_info = f"{country_name} 🏳️"
+            country_info = f"{country_name} 🏳️"
     return country_info, exact_range
 
 def safe_text(text):
@@ -213,41 +260,44 @@ def monitor_ranges():
                 "Referer": "https://www.ivasms.com/portal/sms/received"
             }
             
-            # ডেট ফিল্টার (আজকের ডেট পাঠানো হচ্ছে)
-            today_str = time.strftime("%Y-%m-%d")
-            payload = {
-                "draw": "1",
-                "start": "0",
-                "length": "100",
-                "start_date": today_str,
-                "end_date": today_str
-            }
-            
             error_count = 0
             
             while error_count < 5:
                 try:
-                    response = scraper.post(API_URL, headers=headers, data=payload, timeout=20)
+                    response = scraper.get(API_URL, headers=headers, timeout=15)
                     
                     if response.status_code == 200:
-                        
-                        # ⚠️ SMART EMPTY INBOX DETECTOR
-                        if "No SMS found" in response.text or "sms-empty" in response.text:
-                            if is_first_run:
-                                print("📭 Inbox is currently empty. Waiting peacefully for new OTPs...")
-                                is_first_run = False
-                            error_count = 0 # কোনো এরর ধরবে না
-                            time.sleep(6) # ৬ সেকেন্ড পর আবার চেক করবে
-                            continue
-                            
                         try:
                             json_data = response.json()
                         except ValueError:
-                            print(f"🚨 API returned unexpected HTML. Snippet: {response.text[:150]}")
-                            break 
+                            # ⚠️ HTML Error Fix / Empty Inbox Check
+                            if "No SMS found" in response.text or "sms-empty" in response.text:
+                                if is_first_run:
+                                    print("📭 Inbox is currently empty. Waiting peacefully for new OTPs...")
+                                    is_first_run = False
+                                error_count = 0
+                                time.sleep(6)
+                                continue
+                            else:
+                                print(f"🚨 API returned HTML instead of JSON. Waiting and retrying...")
+                                break 
                             
-                        sms_list = json_data.get('data', [])
-                        
+                        # JSON Data Handle
+                        if isinstance(json_data, dict):
+                            sms_list = json_data.get('data', [])
+                        elif isinstance(json_data, list):
+                            sms_list = json_data
+                        else:
+                            sms_list = []
+                            
+                        if not sms_list or len(sms_list) == 0:
+                            if is_first_run:
+                                print("📭 Inbox is currently empty. Waiting peacefully for new OTPs...")
+                                is_first_run = False
+                            error_count = 0
+                            time.sleep(6)
+                            continue
+                            
                         if is_first_run:
                             print(f"📥 Found {len(sms_list)} OTPs in inbox. Forwarding them to the group...")
                             is_first_run = False
@@ -255,10 +305,10 @@ def monitor_ranges():
                         for sms in reversed(sms_list):
                             msg_id = str(sms.get('id', ''))
                             
-                            service_raw = safe_text(sms.get('originator', 'Unknown'))
+                            service_raw = safe_text(sms.get('originator', sms.get('sender', 'Unknown')))
                             term_data = sms.get('termination', {})
-                            raw_number = str(term_data.get('test_number', sms.get('test_number', 'Unknown')))
-                            full_text = safe_text(sms.get('messagedata', 'No Text'))
+                            raw_number = str(sms.get('number', sms.get('receiver', term_data.get('test_number', 'Unknown'))))
+                            full_text = safe_text(sms.get('messagedata', sms.get('message', 'No Text')))
                             
                             msg_signature = f"{raw_number}_{service_raw}_{full_text}"
                             
@@ -279,6 +329,7 @@ def monitor_ranges():
                                 country_name = country_parts[0]
                                 flag = country_parts[1] if len(country_parts) > 1 else "🌐"
 
+                                # 🌟 RS OTP BOT STYLE DESIGN
                                 msg_body = (
                                     f"{flag} {country_name} {service_title} Otp Code Received Successfully 🎉\n\n"
                                     f"🔐 <b>Your OTP:</b> <code>{otp_code}</code>\n\n"
@@ -296,7 +347,8 @@ def monitor_ranges():
                                 )
                                 
                                 try:
-                                    bot.send_message(GROUP_ID, msg_body, parse_mode="HTML", reply_markup=markup, disable_notification=False)
+                                    # ⚠️ সাইলেন্ট মেসেজ (disable_notification=True)
+                                    bot.send_message(GROUP_ID, msg_body, parse_mode="HTML", reply_markup=markup, disable_notification=True)
                                     print(f"✅ PAID OTP Sent >> {service_title} | Number: {exact_range}")
                                     time.sleep(2.5) 
                                 except Exception as e:
@@ -318,7 +370,7 @@ def monitor_ranges():
                     print(f"⚠️ Fetch Error: {e}")
                     error_count += 1
                     
-                time.sleep(6) # ইনবক্স চেক করার গ্যাপ
+                time.sleep(5) 
                 
             print("🔄 Connection lost or Session expired. Going back to Steal Cookies...")
             
@@ -327,7 +379,7 @@ def monitor_ranges():
             time.sleep(10)
 
 if __name__ == "__main__":
-    print("🤖 Paid SMS Bot is turning on with Smart Empty Inbox Detector...")
+    print("🤖 Paid SMS Bot is turning on (Super Massive Country & Silent Fix)...")
     threading.Thread(target=monitor_ranges, daemon=True).start()
     
     while True:
