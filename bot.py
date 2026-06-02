@@ -215,21 +215,44 @@ def monitor_ranges():
                     
                 print("✅ Dashboard Reached! Letting cookies settle for 5 seconds...")
                 time.sleep(5) 
+                
+                # 🚀 SMART FIX 1: সরাসরি এসএমএস পোর্টাল পেজে ন্যাভিগেট করা
+                print("🌍 Navigating explicitly to the SMS received portal...")
+                try:
+                    driver.get("https://www.ivasms.com/portal/sms/received")
+                    time.sleep(5)
+                except Exception as ex:
+                    print(f"⚠️ Navigation warning: {ex}")
             
             print("⚡ Scanning Paid Inbox for new OTPs using Selenium fetch...")
             
-            # 🛠️ সরাসরি ব্রাউজারের ভেতর থেকে fetch স্ক্রিপ্ট রান করানো হচ্ছে যাতে ক্লাউডফ্লেয়ার ব্লক করতে না পারে।
+            # 🚀 SMART FIX 2: XSRF-TOKEN এবং XMLHttpRequest হেডারসহ অ্যাজাক্স কল করা
             js_script = """
-            return fetch(window.location.origin + '/portal/live/my_sms')
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('HTTP status ' + response.status);
-                    }
-                    return response.json();
-                })
-                .catch(err => {
-                    return { error: err.message };
-                });
+            const getCookie = (name) => {
+                const value = `; ${document.cookie}`;
+                const parts = value.split(`; ${name}=`);
+                if (parts.length === 2) return decodeURIComponent(parts.pop().split(';').shift());
+                return '';
+            };
+            const xsrfToken = getCookie('XSRF-TOKEN');
+            
+            return fetch(window.location.origin + '/portal/live/my_sms', {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json, text/javascript, */*; q=0.01',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-XSRF-TOKEN': xsrfToken
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('HTTP status ' + response.status);
+                }
+                return response.json();
+            })
+            .catch(err => {
+                return { error: err.message };
+            });
             """
             
             try:
@@ -246,7 +269,7 @@ def monitor_ranges():
             if isinstance(json_data, dict) and "error" in json_data:
                 error_msg = json_data["error"]
                 print(f"🚨 API fetch failed: {error_msg}")
-                # সেশন এক্সপায়ার হলে ড্রাইভার রিসেট করে আবার লগইন করতে বলা হচ্ছে
+                # সেশন এক্সপায়ার হলে বা সেশন ড্যামেজ হলে ব্রাউজার রিসেট করে পুনরায় লগইন করবে
                 if "401" in error_msg or "403" in error_msg or "419" in error_msg or "status 0" in error_msg:
                     print("🔄 Session expired or Cloudflare block detected. Restarting login flow...")
                     try: driver.quit()
