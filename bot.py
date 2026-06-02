@@ -23,8 +23,8 @@ PASSWORD = os.getenv("PASSWORD")
 GROUP_ID = "-1003871481057"
 USER_BOT_USERNAME = "YourOTPBot"
 
-# ⚠️ MASTER INBOX API (এটি আপনার পেইড ইনবক্সের লাইভ ওটিপি আনবে)
-API_URL = "https://www.ivasms.com/portal/live/my_sms"
+# ⚠️ MASTER INBOX API (এটি আপনার পেইড ইনবক্সের আসল JSON ডাটা আনবে)
+API_URL = "https://www.ivasms.com/portal/sms/received/getsms"
 
 # ==========================================
 # 🎯 SERVICE FILTERS & LOGOS
@@ -143,7 +143,8 @@ def get_country_and_exact_range(number, range_text):
         letters_only = re.findall(r'[A-Za-z]+', str(range_text))
         if letters_only:
             country_name = ' '.join(letters_only).title()
-            country_info = f"{country_name} 🏳️"
+            if country_name.lower() != "active": 
+                country_info = f"{country_name} 🏳️"
     return country_info, exact_range
 
 def safe_text(text):
@@ -198,13 +199,13 @@ def get_fresh_cookies():
         except: driver.click('button[type="submit"]')
             
         print("⏳ Waiting to reach the dashboard...")
-        timeout_counter = 40
+        timeout_counter = 30
         while "login" in driver.current_url and timeout_counter > 0:
             time.sleep(1)
             timeout_counter -= 1
             
         if "login" in driver.current_url:
-            print("❌ Login Failed! Cloudflare blocked or wrong password.")
+            print("❌ Login Failed! Check credentials or CF block.")
             driver.quit()
             return None, None, None
             
@@ -233,7 +234,7 @@ def get_fresh_cookies():
         return None, None, None
 
 # ==========================================
-# 📡 STEP 2: 24/7 INBOX SCANNING
+# 📡 STEP 2: 24/7 PAID INBOX SCANNING
 # ==========================================
 def monitor_ranges():
     global is_first_run, seen_messages, seen_signatures
@@ -260,27 +261,27 @@ def monitor_ranges():
                 "Referer": "https://www.ivasms.com/portal/sms/received"
             }
             
+            # ⚠️ PAYLOAD FIX: আজকের ডেটের সব মেসেজ আনার জন্য POST রিকোয়েস্ট পেলোড
+            today_str = time.strftime("%Y-%m-%d")
+            payload = {
+                "start": today_str,
+                "end": today_str
+            }
+            
             error_count = 0
+            loop_counter = 0
             
             while error_count < 5:
                 try:
-                    response = scraper.get(API_URL, headers=headers, timeout=15)
+                    # ⚠️ POST রিকোয়েস্ট করা হলো (সঠিক ডাটা পাওয়ার জন্য)
+                    response = scraper.post(API_URL, headers=headers, data=payload, timeout=20)
                     
                     if response.status_code == 200:
                         try:
                             json_data = response.json()
                         except ValueError:
-                            # ⚠️ HTML Error Fix / Empty Inbox Check
-                            if "No SMS found" in response.text or "sms-empty" in response.text:
-                                if is_first_run:
-                                    print("📭 Inbox is currently empty. Waiting peacefully for new OTPs...")
-                                    is_first_run = False
-                                error_count = 0
-                                time.sleep(6)
-                                continue
-                            else:
-                                print(f"🚨 API returned HTML instead of JSON. Waiting and retrying...")
-                                break 
+                            print(f"🚨 API returned HTML instead of JSON. Waiting and retrying...")
+                            break 
                             
                         # JSON Data Handle
                         if isinstance(json_data, dict):
@@ -302,6 +303,8 @@ def monitor_ranges():
                             print(f"📥 Found {len(sms_list)} OTPs in inbox. Forwarding them to the group...")
                             is_first_run = False
 
+                        new_msgs_found = False
+
                         for sms in reversed(sms_list):
                             msg_id = str(sms.get('id', ''))
                             
@@ -313,6 +316,7 @@ def monitor_ranges():
                             msg_signature = f"{raw_number}_{service_raw}_{full_text}"
                             
                             if msg_id and msg_id not in seen_messages and msg_signature not in seen_signatures:
+                                new_msgs_found = True
                                 
                                 if len(seen_signatures) > 1000:
                                     seen_signatures.clear()
@@ -325,6 +329,7 @@ def monitor_ranges():
                                 otp_code = extract_otp(full_text)
                                 service_title = service_raw.title()
                                 
+                                # দেশের নাম এবং পতাকা আলাদা করা
                                 country_parts = country_info.split(' ')
                                 country_name = country_parts[0]
                                 flag = country_parts[1] if len(country_parts) > 1 else "🌐"
@@ -359,6 +364,9 @@ def monitor_ranges():
                                         print(f"❌ Telegram Error: {e}")
                                     
                         error_count = 0 
+                        loop_counter += 1
+                        if loop_counter % 6 == 0 and not new_msgs_found:
+                            print("📡 Still scanning Inbox... Waiting for NEW OTPs...")
                         
                     elif response.status_code in [401, 403, 419]:
                         print(f"🚨 Session Expired (Code {response.status_code}). Restarting auto-login...")
@@ -370,7 +378,7 @@ def monitor_ranges():
                     print(f"⚠️ Fetch Error: {e}")
                     error_count += 1
                     
-                time.sleep(5) 
+                time.sleep(5) # ইনবক্স একটু দ্রুত (৫ সেকেন্ড পর পর) চেক করবে
                 
             print("🔄 Connection lost or Session expired. Going back to Steal Cookies...")
             
@@ -379,7 +387,7 @@ def monitor_ranges():
             time.sleep(10)
 
 if __name__ == "__main__":
-    print("🤖 Paid SMS Bot is turning on (Super Massive Country & Silent Fix)...")
+    print("🤖 Paid SMS Bot is turning on (JSON Fix & Silent Mod)...")
     threading.Thread(target=monitor_ranges, daemon=True).start()
     
     while True:
