@@ -10,6 +10,7 @@ import telebot
 import logging
 from seleniumbase import Driver
 
+# টেলিগ্রামের ফালতু এরর লগ বন্ধ করা হলো
 telebot.logger.setLevel(logging.ERROR)
 
 # ==========================================
@@ -31,6 +32,8 @@ SERVICE_LOGOS = {
     "TIKTOK": "🎵 TikTok", "GOOGLE": "🔴 Google", "VIBER": "🟪 Viber", "MICROSOFT": "🪟 Microsoft",
     "SHEIN": "👗 SHEIN", "HUAWEI": "🟥 Huawei"
 }
+ALLOWED_SERVICES = list(SERVICE_LOGOS.keys())
+BLOCKED_SERVICES = ["TIKTOKADS"] 
 
 # ==========================================
 # 🌍 SUPER MASSIVE COUNTRY DICTIONARY (270+ Codes)
@@ -141,6 +144,7 @@ def get_country_and_exact_range(number, range_text=""):
             country_name = ' '.join(letters_only).title()
             if country_name.lower() != "active": 
                 country_info = f"{country_name} 🏳️"
+                
     return country_info, exact_range
 
 def safe_text(text):
@@ -168,28 +172,35 @@ def run_smart_bot():
     
     while True:
         try:
-            print("🚀 Booting up invisible AI Browser...")
-            driver = Driver(uc=True, headless=False) # Headless=False helps bypass CF
+            print("🚀 Booting up invisible AI Browser (Stealth Mode)...")
+            driver = Driver(uc=True, headless=False)
             driver.set_page_load_timeout(60)
             
-            # 1. Login Process
+            # 1. Login Process with Smart Reconnect
             print("🔐 Navigating to iVASMS login...")
-            try: driver.get("https://www.ivasms.com/login")
-            except: pass
+            driver.uc_open_with_reconnect("https://www.ivasms.com/login", 5)
+            time.sleep(4)
             
+            # ⚠️ AI ByPass Logic: Check if Email box is missing (Hard Cloudflare)
+            if not driver.is_element_visible('input[name="email"]'):
+                print("🛡️ Cloudflare Shield detected. Forcing auto-resolve...")
+                try: driver.uc_gui_click_captcha(); time.sleep(4)
+                except: pass
+                
+                # If still blocked, reconnect again
+                if not driver.is_element_visible('input[name="email"]'):
+                    print("🔄 Retrying CF Bypass...")
+                    driver.uc_open_with_reconnect("https://www.ivasms.com/login", 5)
+                    time.sleep(4)
+            
+            # Now wait for Email safely
             print("⏳ Waiting for Email Field...")
-            # Smart Wait: wait up to 40 seconds, but move instantly if found
-            driver.wait_for_element('input[name="email"]', timeout=40)
+            driver.wait_for_element('input[name="email"]', timeout=20)
             
             print("✅ CF bypassed! Entering credentials...")
             driver.type('input[name="email"]', EMAIL)
             driver.type('input[name="password"]', PASSWORD)
-            
-            print("⏳ Waiting 5 seconds for Turnstile to auto-resolve...")
-            time.sleep(5)
-            
-            try: driver.uc_gui_click_captcha(); time.sleep(2)
-            except: pass
+            time.sleep(1)
             
             print("🖱️ Clicking Login Button...")
             try: driver.uc_click('button[type="submit"]')
@@ -202,20 +213,20 @@ def run_smart_bot():
                 timeout_counter -= 1
                 
             if "login" in driver.current_url:
-                print("❌ Login Failed! Restarting process...")
+                print("❌ Login Failed! Restarting process to trick CF...")
                 driver.quit()
                 time.sleep(10)
                 continue
                 
-            print("✅ Login Successful! Moving to 'My SMS' Page (Video Logic)...")
+            print("✅ Login Successful! Moving to 'My SMS' Page...")
             
-            # 2. Navigate to the exact page shown in the video
+            # 2. Navigate to the exact page shown in your video
             driver.get("https://www.ivasms.com/portal/sms/received")
-            time.sleep(5) # Let the page load
+            time.sleep(5) 
             
-            print("📡 Starting 24/7 OTP Scanning Loop...")
+            print("📡 Starting 24/7 Paid OTP Scanning Loop...")
             
-            # 3. Inject JS to fetch data directly via the browser's authenticated session
+            # 3. Inject JS to fetch data (The Video Logic Method)
             fetch_script = """
             var callback = arguments[arguments.length - 1];
             var csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
@@ -234,10 +245,9 @@ def run_smart_bot():
             """
             
             driver.set_script_timeout(30)
-            
             error_streak = 0
             
-            # Inner scanning loop (stays on the page and scans every 5 seconds)
+            # Inner scanning loop
             while error_streak < 5:
                 try:
                     result = driver.execute_async_script(fetch_script)
@@ -248,7 +258,6 @@ def run_smart_bot():
                         try:
                             json_data = json.loads(response_text)
                         except ValueError:
-                            # If it returns HTML (like empty inbox), ignore gracefully
                             if "No SMS found" in response_text or "sms-empty" in response_text:
                                 if is_first_run:
                                     print("📭 Inbox is currently empty. Waiting for new OTPs...")
@@ -321,7 +330,7 @@ def run_smart_bot():
                                 except Exception as e:
                                     print(f"❌ Telegram Error: {e}")
                                     
-                        error_streak = 0 # Reset error count if successful
+                        error_streak = 0 
                         
                     elif status in [401, 403, 419]:
                         print(f"🚨 Session Expired (Code {status}). Breaking loop to re-login...")
@@ -334,9 +343,9 @@ def run_smart_bot():
                     print(f"⚠️ Script Execution Error: {e}")
                     error_streak += 1
                     
-                time.sleep(5) # ⚠️ প্রতি ৫ সেকেন্ড পরপর "Get SMS" বাটনের কাজ করবে
+                time.sleep(5) 
                 
-            print("🔄 Browser Session lost or timed out. Restarting the whole process...")
+            print("🔄 Browser Session lost. Restarting the whole process...")
             driver.quit()
             
         except Exception as e:
@@ -347,7 +356,7 @@ def run_smart_bot():
             time.sleep(10)
 
 if __name__ == "__main__":
-    print("🤖 Paid SMS Bot is turning on (Video Logic Applied!)...")
+    print("🤖 Paid SMS Bot is turning on (Ultimate Anti-Block Version!)...")
     threading.Thread(target=run_smart_bot, daemon=True).start()
     
     while True:
