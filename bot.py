@@ -2,6 +2,7 @@ import os
 import time
 import json
 import re
+import random
 import threading
 import html
 import urllib.parse
@@ -108,17 +109,6 @@ seen_messages = set()
 seen_signatures = set() 
 is_first_run = True
 
-@bot.message_handler(commands=['setbot'])
-def set_bot_username(message):
-    global USER_BOT_USERNAME
-    try:
-        if str(message.chat.id) == GROUP_ID:
-            text = message.text.split()
-            if len(text) > 1:
-                USER_BOT_USERNAME = text[1].replace('https://t.me/', '').replace('@', '')
-                bot.reply_to(message, f"✅ <b>Bot Link Updated:</b> @{USER_BOT_USERNAME}", parse_mode="HTML")
-    except: pass
-
 def get_country_and_exact_range(number, range_text=""):
     num_str = "".join(filter(str.isdigit, str(number)))
     while num_str.startswith('0'): num_str = num_str[1:]
@@ -176,22 +166,35 @@ def monitor_ranges():
                 driver = Driver(uc=True, headless=False)
                 driver.set_page_load_timeout(60)
                 
-                print("🔐 Navigating to iVASMS login...")
-                try: driver.get("https://www.ivasms.com/login")
-                except: pass
+                # 🚀 SMART FIX 1: সাধারণ get-এর বদলে uc_open_with_reconnect মেথড ব্যবহার করে ক্লাউডফ্লেয়ার বাইপাস
+                print("🔐 Navigating to iVASMS login with reconnect...")
+                try: 
+                    driver.uc_open_with_reconnect("https://www.ivasms.com/login", reconnect_time=5)
+                except Exception as e: 
+                    print(f"⚠️ Navigation warning: {e}")
+                
+                # ইনিশিয়াল চ্যালেঞ্জ সলভার রিকোয়েস্ট
+                try: 
+                    driver.uc_gui_click_captcha()
+                    time.sleep(random.uniform(2.0, 3.5))
+                except: 
+                    pass
                 
                 print("⏳ Waiting for Email Field...")
                 driver.wait_for_element('input[name="email"]', timeout=30)
                 
-                print("✅ CF bypassed! Entering credentials...")
+                print("✅ CF bypassed! Entering credentials like a human...")
+                # মানুষের মতো র্যান্ডম ডিলে এবং হিউম্যান-বিহেভিয়ার সহ ইনপুট টাইপ করা হচ্ছে
                 driver.type('input[name="email"]', EMAIL)
-                driver.type('input[name="password"]', PASSWORD)
+                time.sleep(random.uniform(1.8, 3.0)) # মানুষের টাইপিং গ্যাপ
                 
-                # 🚀 SMART FIX 1: ক্লাউডফ্লেয়ার টার্নস্টাইল টোকেন জেনারেট হওয়ার জন্য অপেক্ষা করা
+                driver.type('input[name="password"]', PASSWORD)
+                time.sleep(random.uniform(1.5, 2.5)) # মানুষের পাসওয়ার্ড লেখার বিরতি
+                
+                # 🚀 SMART FIX 2: ক্লাউডফ্লেয়ার টার্নস্টাইল টোকেন জেনারেট হওয়ার জন্য র্যান্ডমলি চেক করা
                 print("⏳ Waiting for Cloudflare Turnstile token to generate...")
                 turnstile_solved = False
                 for _ in range(35):
-                    # cf-turnstile-response ফিল্ডে টোকেন এসেছে কি না চেক করা
                     token = driver.execute_script("return document.querySelector('[name=cf-turnstile-response]') ? document.querySelector('[name=cf-turnstile-response]').value : ''")
                     if token and len(token) > 10:
                         print("✅ Cloudflare Turnstile Solved Successfully!")
@@ -201,8 +204,14 @@ def monitor_ranges():
                 
                 if not turnstile_solved:
                     print("🤖 Auto-solve took too long. Attempting manual click on Turnstile...")
-                    try: driver.uc_gui_click_captcha(); time.sleep(3)
-                    except: pass
+                    try: 
+                        driver.uc_gui_click_captcha()
+                        time.sleep(random.uniform(3.0, 4.5))
+                    except: 
+                        pass
+                
+                # সাবমিট বাটনে ক্লিক করার ঠিক আগে মানুষের মতো সামান্য বিরতি
+                time.sleep(random.uniform(1.2, 2.3))
                 
                 print("🖱️ Clicking Login Submit Button...")
                 try: driver.uc_click('button[type="submit"]')
@@ -212,7 +221,7 @@ def monitor_ranges():
                 success = False
                 for _ in range(25):
                     current_url = driver.current_url
-                    # নিশ্চিত করা হচ্ছে যে পেজটি সফলভাবে ড্যাশবোর্ডে গিয়েছে এবং লগইন পেজে আটকে নেই
+                    # ড্যাশবোর্ডে সেশন প্রবেশ করেছে কি না তা নিশ্চিত করা হচ্ছে
                     if "/portal" in current_url and "login" not in current_url:
                         success = True
                         break
@@ -227,17 +236,17 @@ def monitor_ranges():
                     continue
                     
                 print("✅ Dashboard Reached Successfully! Letting cookies settle...")
-                time.sleep(5) 
+                time.sleep(random.uniform(4.5, 6.0)) 
                 
-                # সরাসরি এসএমএস রিসিভড পোর্টাল পেজে চলে যাওয়া
+                # 🚀 SMART FIX 3: পোর্টাল পেজে যাওয়ার সময়ও reconnect মেথড ব্যবহার যাতে সিকিউরিটি ট্রিগার না হয়
                 print("🌍 Navigating explicitly to the SMS received portal...")
                 try:
-                    driver.get("https://www.ivasms.com/portal/sms/received")
-                    time.sleep(5)
+                    driver.uc_open_with_reconnect("https://www.ivasms.com/portal/sms/received", reconnect_time=5)
+                    time.sleep(random.uniform(4.0, 5.5))
                 except Exception as ex:
                     print(f"⚠️ Navigation warning: {ex}")
                 
-                # 🚀 SMART FIX 2: পাইথন সেলেনিয়াম থেকে ডাইরেক্ট কুকি বের করে রাখা
+                # কুকি সংগ্রহ করা হচ্ছে
                 cookies = driver.get_cookies()
                 for c in cookies:
                     if c['name'] == 'XSRF-TOKEN':
@@ -247,7 +256,7 @@ def monitor_ranges():
             
             print("⚡ Scanning Paid Inbox for new OTPs using Selenium fetch...")
             
-            # 🚀 SMART FIX 3: নিরাপদ AJAX ফেচ রিকোয়েস্ট (যা সরাসরি স্ট্যাটাস ও রেসপন্স টেক্সট পাইথনে পাস করবে)
+            # নিরাপদ AJAX ফেচ রিকোয়েস্ট (XSRF ও XML-XMLHttpRequest হেডারসহ)
             js_script = f"""
             const xsrfToken = "{xsrf_token}";
             return fetch(window.location.origin + '/portal/live/my_sms', {{
@@ -292,7 +301,7 @@ def monitor_ranges():
             content_type = result_data.get("contentType", "")
             raw_text = result_data.get("text", "")
             
-            # সেশন ড্যামেজ হলে বা অন্য কোনো কারণে নন-২০০ কোড আসলে
+            # সেশন ড্যামেজ বা ইনভ্যালিড কোড আসলে
             if status_code != 200:
                 print(f"🚨 API returned non-200 status code: {status_code}. Session must be expired!")
                 try: driver.quit()
@@ -301,7 +310,7 @@ def monitor_ranges():
                 time.sleep(5)
                 continue
                 
-            # 🚀 SMART FIX 4: এইচটিএমএল বা লগইন পেজে রিডাইরেকশন ডিটেকশন (সেলফ-হিলিং)
+            # এইচটিএমএল বা লগইন পেজে রিডাইরেকশন ডিটেকশন (সেলফ-হিলিং)
             if "html" in content_type.lower() or raw_text.strip().startswith("<!DOCTYPE") or raw_text.strip().startswith("<html"):
                 print("🚨 API returned HTML Page instead of JSON! Re-login needed.")
                 print("🔄 Restarting login flow dynamically...")
