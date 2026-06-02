@@ -57,7 +57,7 @@ COUNTRY_DICT = {
     "218": ("Libya", "🇱🇾"), "220": ("Gambia", "🇬🇲"), "221": ("Senegal", "🇸🇳"), 
     "222": ("Mauritania", "🇲🇷"), "223": ("Mali", "🇲🇱"), "224": ("Guinea", "🇬🇳"), 
     "225": ("Ivory Coast", "🇨🇮"), "226": ("Burkina Faso", "🇧🇫"), "227": ("Niger", "🇳🇪"), 
-    "228": ("Togo", "🇹🇬"), "229": ("Benin", "🇧🇯"), "230": ("Mauritius", "🇲🇺"), 
+    "228": ("Togo", "🇹🇬"), "229": ("Benin", "🇧জয়"), "230": ("Mauritius", "🇲🇺"), 
     "231": ("Liberia", "🇱🇷"), "232": ("Sierra Leone", "🇸🇱"), "233": ("Ghana", "🇬🇭"), 
     "234": ("Nigeria", "🇳🇬"), "235": ("Chad", "🇹🇩"), "236": ("CAR", "🇨🇫"), 
     "237": ("Cameroon", "🇨🇲"), "238": ("Cape Verde", "🇨🇻"), "239": ("Sao Tome", "🇸🇹"), 
@@ -150,13 +150,12 @@ def extract_otp(full_text):
     return "N/A"
 
 # ==========================================
-# 📡 24/7 INBOX SCANNING (PAID SMS VIA SELENIUM)
+# 📡 24/7 INBOX SCANNING (PAID SMS DIRECT ACCESSED)
 # ==========================================
 def monitor_ranges():
     global is_first_run, seen_messages, seen_signatures
     
     driver = None
-    xsrf_token = ""
     
     while True:
         try:
@@ -166,52 +165,51 @@ def monitor_ranges():
                 driver = Driver(uc=True, headless=False)
                 driver.set_page_load_timeout(60)
                 
-                # 🚀 SMART FIX 1: সাধারণ get-এর বদলে uc_open_with_reconnect মেথড ব্যবহার করে ক্লাউডফ্লেয়ার বাইপাস
                 print("🔐 Navigating to iVASMS login with reconnect...")
                 try: 
                     driver.uc_open_with_reconnect("https://www.ivasms.com/login", reconnect_time=5)
                 except Exception as e: 
                     print(f"⚠️ Navigation warning: {e}")
                 
-                # ইনিশিয়াল চ্যালেঞ্জ সলভার রিকোয়েস্ট
-                try: 
-                    driver.uc_gui_click_captcha()
-                    time.sleep(random.uniform(2.0, 3.5))
-                except: 
-                    pass
-                
                 print("⏳ Waiting for Email Field...")
                 driver.wait_for_element('input[name="email"]', timeout=30)
                 
                 print("✅ CF bypassed! Entering credentials like a human...")
-                # মানুষের মতো র্যান্ডম ডিলে এবং হিউম্যান-বিহেভিয়ার সহ ইনপুট টাইপ করা হচ্ছে
                 driver.type('input[name="email"]', EMAIL)
-                time.sleep(random.uniform(1.8, 3.0)) # মানুষের টাইপিং গ্যাপ
+                time.sleep(random.uniform(1.5, 2.5)) # মানুষের টাইপিং বিহেভিয়ার ডিলে
                 
                 driver.type('input[name="password"]', PASSWORD)
-                time.sleep(random.uniform(1.5, 2.5)) # মানুষের পাসওয়ার্ড লেখার বিরতি
+                time.sleep(random.uniform(1.2, 2.0))
                 
-                # 🚀 SMART FIX 2: ক্লাউডফ্লেয়ার টার্নস্টাইল টোকেন জেনারেট হওয়ার জন্য র্যান্ডমলি চেক করা
-                print("⏳ Waiting for Cloudflare Turnstile token to generate...")
-                turnstile_solved = False
-                for _ in range(35):
-                    token = driver.execute_script("return document.querySelector('[name=cf-turnstile-response]') ? document.querySelector('[name=cf-turnstile-response]').value : ''")
-                    if token and len(token) > 10:
-                        print("✅ Cloudflare Turnstile Solved Successfully!")
-                        turnstile_solved = True
-                        break
-                    time.sleep(1)
+                # 🚀 SMART FIX 1: পেজে আসলেই ক্লাউডফ্লেয়ার টার্নস্টাইল আছে কি না চেক করা
+                turnstile_present = driver.execute_script("""
+                    return !!(document.querySelector('.cf-turnstile') || 
+                              document.querySelector('#cf-turnstile') || 
+                              document.querySelector('iframe[src*="challenges.cloudflare.com"]'));
+                """)
                 
-                if not turnstile_solved:
-                    print("🤖 Auto-solve took too long. Attempting manual click on Turnstile...")
-                    try: 
-                        driver.uc_gui_click_captcha()
-                        time.sleep(random.uniform(3.0, 4.5))
-                    except: 
-                        pass
+                if turnstile_present:
+                    print("⏳ Cloudflare Turnstile detected. Waiting for auto-solve...")
+                    turnstile_solved = False
+                    for _ in range(25):
+                        token = driver.execute_script("return document.querySelector('[name=cf-turnstile-response]') ? document.querySelector('[name=cf-turnstile-response]').value : ''")
+                        if token and len(token) > 10:
+                            print("✅ Cloudflare Turnstile Solved Successfully!")
+                            turnstile_solved = True
+                            break
+                        time.sleep(1)
+                    
+                    if not turnstile_solved:
+                        print("🤖 Attempting manual click on Turnstile...")
+                        try: 
+                            driver.uc_gui_click_captcha()
+                            time.sleep(random.uniform(3.0, 4.0))
+                        except: 
+                            pass
+                else:
+                    print("🛡️ No Cloudflare Turnstile CAPTCHA detected on page. Proceeding...")
                 
-                # সাবমিট বাটনে ক্লিক করার ঠিক আগে মানুষের মতো সামান্য বিরতি
-                time.sleep(random.uniform(1.2, 2.3))
+                time.sleep(random.uniform(1.0, 2.0)) # মানুষের সাবমিট ডিলে
                 
                 print("🖱️ Clicking Login Submit Button...")
                 try: driver.uc_click('button[type="submit"]')
@@ -221,7 +219,6 @@ def monitor_ranges():
                 success = False
                 for _ in range(25):
                     current_url = driver.current_url
-                    # ড্যাশবোর্ডে সেশন প্রবেশ করেছে কি না তা নিশ্চিত করা হচ্ছে
                     if "/portal" in current_url and "login" not in current_url:
                         success = True
                         break
@@ -235,96 +232,57 @@ def monitor_ranges():
                     time.sleep(15)
                     continue
                     
-                print("✅ Dashboard Reached Successfully! Letting cookies settle...")
-                time.sleep(random.uniform(4.5, 6.0)) 
-                
-                # 🚀 SMART FIX 3: পোর্টাল পেজে যাওয়ার সময়ও reconnect মেথড ব্যবহার যাতে সিকিউরিটি ট্রিগার না হয়
-                print("🌍 Navigating explicitly to the SMS received portal...")
-                try:
-                    driver.uc_open_with_reconnect("https://www.ivasms.com/portal/sms/received", reconnect_time=5)
-                    time.sleep(random.uniform(4.0, 5.5))
-                except Exception as ex:
-                    print(f"⚠️ Navigation warning: {ex}")
-                
-                # কুকি সংগ্রহ করা হচ্ছে
-                cookies = driver.get_cookies()
-                for c in cookies:
-                    if c['name'] == 'XSRF-TOKEN':
-                        xsrf_token = urllib.parse.unquote(c['value'])
-                        break
-                print(f"🔑 XSRF-TOKEN Loaded: {xsrf_token[:15]}...")
+                print("✅ Dashboard Reached Successfully! Letting session stabilize...")
+                time.sleep(5) 
             
-            print("⚡ Scanning Paid Inbox for new OTPs using Selenium fetch...")
-            
-            # নিরাপদ AJAX ফেচ রিকোয়েস্ট (XSRF ও XML-XMLHttpRequest হেডারসহ)
-            js_script = f"""
-            const xsrfToken = "{xsrf_token}";
-            return fetch(window.location.origin + '/portal/live/my_sms', {{
-                method: 'GET',
-                headers: {{
-                    'Accept': 'application/json, text/javascript, */*; q=0.01',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-XSRF-TOKEN': xsrfToken
-                }}
-            }})
-            .then(response => {{
-                return response.text().then(text => {{
-                    return {{
-                        status: response.status,
-                        contentType: response.headers.get('content-type') || '',
-                        text: text
-                    }};
-                }});
-            }})
-            .catch(err => {{
-                return {{ error: err.message }};
-            }});
-            """
-            
+            # 🚀 SMART FIX 2: কোনো স্ক্রিপ্ট ফেচ নয়, ব্রাউজার নিজেই সরাসরি এপিআই ইউআরএল লোড করবে
+            print("⚡ Scanning Paid Inbox directly via browser tab...")
             try:
-                result_data = driver.execute_script(js_script)
-            except Exception as js_err:
-                print(f"⚠️ Driver lost or crashed: {js_err}. Restarting driver...")
+                driver.get("https://www.ivasms.com/portal/live/my_sms")
+                time.sleep(2.5) # পেজ লোড সেটেলমেন্ট ডিলে
+            except Exception as get_err:
+                print(f"⚠️ API navigation error: {get_err}. Restarting driver...")
                 try: driver.quit()
                 except: pass
                 driver = None
                 time.sleep(10)
                 continue
                 
-            # যদি এপিআই কল করার সময় কোনো এরর আসে
-            if isinstance(result_data, dict) and "error" in result_data:
-                print(f"🚨 JS Fetch Error: {result_data['error']}")
-                time.sleep(6)
+            # ব্রাউজার স্ক্রিন থেকে সরাসরি টেক্সট রিড করা
+            try:
+                raw_text = driver.find_element("tag name", "body").text.strip()
+            except Exception as dom_err:
+                print(f"⚠️ Cannot read body text: {dom_err}. Restarting driver...")
+                try: driver.quit()
+                except: pass
+                driver = None
+                time.sleep(10)
                 continue
                 
-            status_code = result_data.get("status", 0)
-            content_type = result_data.get("contentType", "")
-            raw_text = result_data.get("text", "")
-            
-            # সেশন ড্যামেজ বা ইনভ্যালিড কোড আসলে
-            if status_code != 200:
-                print(f"🚨 API returned non-200 status code: {status_code}. Session must be expired!")
+            # ক্লাউডফ্লেয়ার ব্লকিং ডিটেকশন ও স্বয়ংক্রিয় ক্যাপচা ক্লিক সলভার
+            if "cloudflare" in raw_text.lower() or "just a moment" in raw_text.lower() or "security" in raw_text.lower():
+                print("🛡️ Cloudflare challenge detected on API URL! Attempting bypass...")
+                try:
+                    driver.uc_gui_click_captcha()
+                    time.sleep(5)
+                except:
+                    pass
+                continue
+                
+            # যদি সেশন এক্সপায়ার হয়ে লগইন পেজে নিয়ে যায় বা ডাটা ইনভ্যালিড হয়
+            if not raw_text.startswith("{") and not raw_text.startswith("["):
+                print("🚨 API returned HTML Page instead of JSON! Session expired. Re-logging in...")
                 try: driver.quit()
                 except: pass
                 driver = None
                 time.sleep(5)
                 continue
                 
-            # এইচটিএমএল বা লগইন পেজে রিডাইরেকশন ডিটেকশন (সেলফ-হিলিং)
-            if "html" in content_type.lower() or raw_text.strip().startswith("<!DOCTYPE") or raw_text.strip().startswith("<html"):
-                print("🚨 API returned HTML Page instead of JSON! Re-login needed.")
-                print("🔄 Restarting login flow dynamically...")
-                try: driver.quit()
-                except: pass
-                driver = None
-                time.sleep(5)
-                continue
-                
-            # ডাটা পার্স করা
+            # ডাটা সফলভাবে পার্স করা
             try:
                 json_data = json.loads(raw_text)
             except Exception as parse_err:
-                print(f"🚨 JSON Parse Exception: {parse_err}. Retrying in next scan...")
+                print(f"🚨 JSON Parse Exception: {parse_err}. Raw text received: {raw_text[:150]}")
                 time.sleep(6)
                 continue
                 
@@ -404,7 +362,7 @@ def monitor_ranges():
                         else:
                             print(f"❌ Telegram Error: {e}")
                             
-            time.sleep(5) 
+            time.sleep(6) 
             
         except Exception as e:
             print(f"🔥 Critical System Error! Self-healing in 10s... Details: {e}")
