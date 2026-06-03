@@ -1,3 +1,4 @@
 pyTelegramBotAPI
 seleniumbase
 cloudscraper
+beautifulsoup4
