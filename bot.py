@@ -46,11 +46,12 @@ COUNTRY_DICT = {
     "39": ("Italy", "🇮🇹"), "44": ("UK", "🇬🇧"), "49": ("Germany", "🇩🇪"), 
     "51": ("Peru", "🇵🇪"), "52": ("Mexico", "🇲🇽"), "53": ("Cuba", "🇨🇺"), 
     "54": ("Argentina", "🇦🇷"), "55": ("Brazil", "🇧🇷"), "57": ("Colombia", "🇨🇴"), 
-    "60": ("Malaysia", "🇲🇾"), "61": ("Australia", "🇦🇺"), "62": ("Indonesia", "🇮🇩"), 
-    "63": ("Philippines", "🇵🇭"), "64": ("New Zealand", "🇳🇿"), "65": ("Singapore", "🇸🇬"), 
-    "66": ("Thailand", "🇹🇭"), "81": ("Japan", "🇯🇵"), "82": ("South Korea", "🇰🇷"), 
-    "84": ("Vietnam", "🇻🇳"), "86": ("China", "🇨🇳"), "90": ("Turkey", "🇹🇷"), 
-    "91": ("India", "🇮🇳"), "92": ("Pakistan", "🇵🇰"), "93": ("Afghanistan", "🇦🇫"), 
+    "58": ("Venezuela", "🇻🇪"), "60": ("Malaysia", "🇲🇾"), "61": ("Australia", "🇦🇺"), 
+    "62": ("Indonesia", "🇮🇩"), "63": ("Philippines", "🇵🇭"), "64": ("New Zealand", "🇳🇿"), 
+    "65": ("Singapore", "🇸🇬"), "66": ("Thailand", "🇹🇭"), "81": ("Japan", "🇯🇵"), 
+    "82": ("South Korea", "🇰🇷"), "84": ("Vietnam", "🇻🇳"), "86": ("China", "🇨🇳"), 
+    "90": ("Turkey", "🇹🇷"), "91": ("India", "🇮🇳"), "92": ("Pakistan", "🇵🇰"), 
+    "93": ("Afghanistan", "🇦🇫"), "94": ("Sri Lanka", "🇱🇰"), "95": ("Myanmar", "🇲🇲"), 
     "98": ("Iran", "🇮🇷"), "212": ("Morocco", "🇲🇦"), "234": ("Nigeria", "🇳🇬"), 
     "249": ("Sudan", "🇸🇩"), "251": ("Ethiopia", "🇪🇹"), "254": ("Kenya", "🇰🇪"), 
     "351": ("Portugal", "🇵🇹"), "380": ("Ukraine", "🇺🇦"), "880": ("Bangladesh", "🇧🇩"), 
@@ -198,7 +199,7 @@ def monitor_ranges():
                 time.sleep(30)
                 continue
                 
-            print("⚡ Starting Smart '3-Step' Scraper (Raw Digit Extractor)...")
+            print("⚡ Starting Smart '3-Step' Scraper (X-Ray Extractor + Time Machine)...")
             scraper = cloudscraper.create_scraper()
             scraper.cookies.update(cookie_dict)
             
@@ -216,7 +217,8 @@ def monitor_ranges():
             loop_heartbeat = 0
             
             while error_count < 5:
-                start_date = (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
+                # ⚠️ Time Machine Fix: গত ৩ দিন থেকে আগামীকাল পর্যন্ত ডাটা আনবে!
+                start_date = (datetime.utcnow() - timedelta(days=3)).strftime("%Y-%m-%d")
                 end_date = (datetime.utcnow() + timedelta(days=1)).strftime("%Y-%m-%d")
                 
                 base_payload = {
@@ -230,10 +232,12 @@ def monitor_ranges():
                     res_ranges = scraper.post("https://www.ivasms.com/portal/sms/received/getsms", headers=headers, data=base_payload, timeout=20)
                     
                     if res_ranges.status_code == 200:
-                        ranges = re.findall(r"toggleRange\('([^']+)'", res_ranges.text)
+                        # রেঞ্জগুলো বের করা (এগুলো সাধারণত 'COUNTRY 1234' ফরম্যাটে থাকে)
+                        ranges = re.findall(r"toggle[A-Za-z0-9_]*\(['\"]([^'\"]+)['\"]", res_ranges.text)
+                        ranges = list(set([r for r in ranges if re.search(r'[A-Za-z]+', r) and re.search(r'\d+', r)]))
                         
                         if not ranges:
-                            print("📭 Inbox is empty today. Waiting for OTPs...")
+                            print(f"📭 Inbox empty for dates: {start_date} to {end_date}. Waiting...")
                             if is_first_run: is_first_run = False
                             error_count = 0
                             time.sleep(10)
@@ -248,8 +252,9 @@ def monitor_ranges():
                             res_num = scraper.post("https://www.ivasms.com/portal/sms/received/getsms/number", headers=headers, data=payload_num, timeout=15)
                             
                             if res_num.status_code == 200:
-                                # 🧠 AI VISUAL EXTRACTOR (যেকোনো ৮-১৫ ডিজিটের নাম্বার সরাসরি বের করবে!)
-                                numbers = list(set(re.findall(r'(?<!\d)\d{8,15}(?!\d)', res_num.text)))
+                                # 🧠 X-RAY DIGIT EXTRACTOR: HTML এর যেকোনো জায়গা থেকে ৮-১৬ ডিজিটের নাম্বার বের করবে
+                                raw_nums = re.findall(r'\b\d{8,16}\b', res_num.text)
+                                numbers = list(set(raw_nums))
                                 
                                 total_active_nums += len(numbers)
                                 
@@ -265,6 +270,7 @@ def monitor_ranges():
                                     res_sms = scraper.post("https://www.ivasms.com/portal/sms/received/getsms/number/sms", headers=headers, data=payload_sms, timeout=15)
                                     
                                     if res_sms.status_code == 200:
+                                        # 🧠 HTML পার্স করে ওটিপি বের করা
                                         soup = BeautifulSoup(res_sms.text, 'html.parser')
                                         rows = soup.find_all('tr')
                                         
@@ -288,6 +294,7 @@ def monitor_ranges():
                                                         
                                                     seen_signatures.add(msg_signature)
                                                     
+                                                    # প্রথমবার রান হলে শুধু সেভ করে রাখবে
                                                     if is_first_run:
                                                         continue
                                                     
@@ -299,6 +306,7 @@ def monitor_ranges():
                                                     country_name = country_parts[0]
                                                     flag = country_parts[1] if len(country_parts) > 1 else "🌐"
 
+                                                    # 🌟 RS OTP BOT STYLE DESIGN
                                                     msg_body = (
                                                         f"{flag} {country_name} {service_title} Otp Code Received Successfully 🎉\n\n"
                                                         f"🔐 <b>Your OTP:</b> <code>{otp_code}</code>\n\n"
@@ -316,6 +324,7 @@ def monitor_ranges():
                                                     )
                                                     
                                                     try:
+                                                        # ⚠️ Mute Mode ON
                                                         bot.send_message(GROUP_ID, msg_body, parse_mode="HTML", reply_markup=markup, disable_notification=True)
                                                         print(f"✅ PAID OTP Sent >> {service_title} | Number: {exact_range}")
                                                     except Exception as e:
@@ -354,7 +363,7 @@ def monitor_ranges():
             time.sleep(10)
 
 if __name__ == "__main__":
-    print("🤖 Paid SMS Bot is turning on (Smart Raw Digit Extractor applied!)...")
+    print("🤖 Paid SMS Bot is turning on (Smart X-Ray Extractor + Time Machine!)...")
     threading.Thread(target=monitor_ranges, daemon=True).start()
     
     while True:
