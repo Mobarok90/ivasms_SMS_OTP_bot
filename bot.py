@@ -112,7 +112,7 @@ def extract_otp(full_text):
     return "N/A"
 
 # ==========================================
-# 🌐 STEP 1: AUTO-LOGIN & GET DOM TOKENS
+# 🌐 STEP 1: AUTO-LOGIN & GET SECURE TOKENS
 # ==========================================
 def get_fresh_cookies_and_tokens():
     print("🚀 Launching invisible Browser to login to Paid Account...")
@@ -149,7 +149,7 @@ def get_fresh_cookies_and_tokens():
         if "login" in driver.current_url:
             print("❌ Login Failed! CF Blocked.")
             driver.quit()
-            return None, None, None, None
+            return None, None, None
             
         print("✅ Dashboard Reached! Moving to 'My SMS' page...")
         driver.get("https://www.ivasms.com/portal/sms/received")
@@ -158,46 +158,45 @@ def get_fresh_cookies_and_tokens():
         cookies = driver.get_cookies()
         user_agent = driver.execute_script("return navigator.userAgent;")
         
-        cookie_dict = {}
-        xsrf_token = ""
-        for c in cookies:
-            cookie_dict[c['name']] = c['value']
-            if c['name'] == 'XSRF-TOKEN':
-                xsrf_token = urllib.parse.unquote(c['value'])
-                
-        # ⚠️ ম্যাজিক: ওয়েবসাইটের HTML থেকে আসল _token চুরি করা হচ্ছে!
+        # ⚠️ ওয়েবসাইটের ভেতর থেকে আসল CSRF টোকেন চুরি করা হচ্ছে
         try:
             page_token = driver.execute_script('return document.querySelector("meta[name=\'csrf-token\']").getAttribute("content");')
         except:
-            page_token = xsrf_token
+            page_token = ""
+            
+        cookie_dict = {}
+        for c in cookies:
+            cookie_dict[c['name']] = c['value']
+            if c['name'] == 'XSRF-TOKEN' and not page_token:
+                page_token = urllib.parse.unquote(c['value'])
         
         print("🍪 Fresh Cookies & Tokens Successfully Grabbed!")
         driver.quit() 
-        return cookie_dict, user_agent, xsrf_token, page_token
+        return cookie_dict, user_agent, page_token
         
     except Exception as e:
         print(f"❌ Failed to grab cookies: {e}")
         if driver:
             try: driver.quit()
             except: pass
-        return None, None, None, None
+        return None, None, None
 
 # ==========================================
-# 📡 STEP 2: HUMAN-LIKE "GET SMS" BUTTON CLICKER
+# 📡 STEP 2: HUMAN-LIKE 3-STEP SCANNER (Range -> Number -> SMS)
 # ==========================================
 def monitor_ranges():
     global is_first_run, seen_signatures
     
     while True:
         try:
-            cookie_dict, user_agent, xsrf_token, page_token = get_fresh_cookies_and_tokens()
+            cookie_dict, user_agent, page_token = get_fresh_cookies_and_tokens()
             
             if not cookie_dict:
                 print("🔄 Auto-Login failed. Retrying in 30 seconds...")
                 time.sleep(30)
                 continue
                 
-            print("⚡ Starting Human-Like 'Get SMS' Simulator...")
+            print("⚡ Starting Smart '3-Step' Scanner...")
             scraper = cloudscraper.create_scraper()
             scraper.cookies.update(cookie_dict)
             
@@ -206,6 +205,7 @@ def monitor_ranges():
                 "Accept": "text/html, */*; q=0.01",
                 "X-Requested-With": "XMLHttpRequest", 
                 "X-CSRF-TOKEN": page_token,
+                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
                 "Origin": "https://www.ivasms.com",
                 "Referer": "https://www.ivasms.com/portal/sms/received"
             }
@@ -213,128 +213,133 @@ def monitor_ranges():
             error_count = 0
             
             while error_count < 5:
+                today_date = time.strftime("%Y-%m-%d")
+                base_payload = {
+                    "_token": page_token,
+                    "start": today_date,
+                    "end": today_date
+                }
+                
                 try:
-                    today_date = time.strftime("%Y-%m-%d")
-                    base_payload = {
-                        "_token": page_token,
-                        "start": today_date,
-                        "end": today_date
-                    }
-                    
-                    # ⚠️ ধাপ ১: "Get SMS" বাটনের রিকোয়েস্ট (Range আনবে)
+                    # ⚠️ ধাপ ১: রেঞ্জ (Range) খুঁজবে
                     res_ranges = scraper.post("https://www.ivasms.com/portal/sms/received/getsms", headers=headers, data=base_payload, timeout=20)
                     
                     if res_ranges.status_code == 200:
                         ranges = re.findall(r"toggleRange\('([^']+)'", res_ranges.text)
                         
                         if not ranges:
-                            if is_first_run:
-                                print("📭 Inbox is empty today. Waiting for OTPs...")
-                                is_first_run = False
+                            print("📭 No active ranges found today. Waiting...")
+                            if is_first_run: is_first_run = False
                             error_count = 0
-                            time.sleep(10)
+                            time.sleep(8)
                             continue
-
-                        # ⚠️ ধাপ ২: Range থেকে Number আনবে
+                            
+                        # ⚠️ ধাপ ২: রেঞ্জে ক্লিক করে নাম্বার খুঁজবে
                         for r in ranges:
                             payload_num = base_payload.copy()
                             payload_num["Range"] = r
                             res_num = scraper.post("https://www.ivasms.com/portal/sms/received/getsms/number", headers=headers, data=payload_num, timeout=15)
                             
-                            if res_num.status_code == 200:
-                                numbers = re.findall(r"toggleSms\('([^']+)'", res_num.text)
+                            numbers = re.findall(r"toggleSms\('([^']+)'", res_num.text)
+                            print(f"🔍 Checking Range: {r} -> Found {len(numbers)} Active Numbers")
+                            
+                            # ⚠️ ধাপ ৩: নাম্বারে ক্লিক করে ওটিপি (SMS) খুঁজবে
+                            for num in numbers:
+                                payload_sms = payload_num.copy()
+                                payload_sms["Number"] = num
+                                res_sms = scraper.post("https://www.ivasms.com/portal/sms/received/getsms/number/sms", headers=headers, data=payload_sms, timeout=15)
                                 
-                                # ⚠️ ধাপ ৩: Number থেকে SMS Table (HTML) আনবে
-                                for num in numbers:
-                                    payload_sms = payload_num.copy()
-                                    payload_sms["Number"] = num
-                                    res_sms = scraper.post("https://www.ivasms.com/portal/sms/received/getsms/number/sms", headers=headers, data=payload_sms, timeout=15)
-                                    
-                                    if res_sms.status_code == 200:
-                                        # 🧠 HTML পার্স করে ওটিপি বের করা হচ্ছে
-                                        soup = BeautifulSoup(res_sms.text, 'html.parser')
-                                        rows = soup.find_all('tr')
+                                # HTML পার্স করে ওটিপি বের করা
+                                soup = BeautifulSoup(res_sms.text, 'html.parser')
+                                rows = soup.find_all('tr')
+                                
+                                # রিভার্স (নতুন মেসেজ আগে)
+                                for row in reversed(rows):
+                                    cols = row.find_all('td')
+                                    if len(cols) >= 2:
+                                        service_raw = safe_text(cols[0].get_text(strip=True)).upper()
+                                        if service_raw == "SENDER" or not service_raw: continue
                                         
-                                        # নতুন মেসেজগুলো আগে প্রসেস করার জন্য রিভার্স করা হলো
-                                        for row in reversed(rows):
-                                            cols = row.find_all('td')
-                                            if len(cols) >= 2:
-                                                service_raw = safe_text(cols[0].get_text(strip=True)).upper()
-                                                if service_raw == "SENDER" or not service_raw: continue
+                                        # মেসেজ এবং রেভিনিউ আলাদা করা
+                                        msg_cell = cols[1].find('div', class_='msg-text')
+                                        if msg_cell:
+                                            full_text = safe_text(msg_cell.get_text(separator=" ", strip=True))
+                                        else:
+                                            full_text = safe_text(cols[1].get_text(separator=" ", strip=True))
+                                        
+                                        # ডুপ্লিকেট চেক (ম্যাজিক সিগনেচার)
+                                        msg_signature = f"{num}_{service_raw}_{full_text}"
+                                        
+                                        if msg_signature not in seen_signatures:
+                                            if len(seen_signatures) > 1000:
+                                                seen_signatures.clear()
                                                 
-                                                full_text = safe_text(cols[1].get_text(separator=" ", strip=True))
-                                                
-                                                # ইউনিক সিগনেচার (যাতে এক মেসেজ ২ বার না যায়)
-                                                msg_signature = f"{num}_{service_raw}_{full_text}"
-                                                
-                                                if msg_signature not in seen_signatures:
-                                                    if len(seen_signatures) > 1000:
-                                                        seen_signatures.clear()
-                                                        
-                                                    seen_signatures.add(msg_signature)
-                                                    
-                                                    # প্রথমবার রান হলে শুধু সেভ করে রাখবে, গ্রুপে দেবে না
-                                                    if is_first_run:
-                                                        continue
-                                                    
-                                                    country_info, exact_range = get_country_and_exact_range(num, r)
-                                                    otp_code = extract_otp(full_text)
-                                                    service_title = service_raw.title()
-                                                    
-                                                    country_parts = country_info.split(' ')
-                                                    country_name = country_parts[0]
-                                                    flag = country_parts[1] if len(country_parts) > 1 else "🌐"
+                                            seen_signatures.add(msg_signature)
+                                            
+                                            # প্রথমবার রান হলে শুধু সেভ করে রাখবে, গ্রুপে দেবে না
+                                            if is_first_run:
+                                                continue
+                                            
+                                            country_info, exact_range = get_country_and_exact_range(num, r)
+                                            otp_code = extract_otp(full_text)
+                                            service_title = service_raw.title()
+                                            
+                                            country_parts = country_info.split(' ')
+                                            country_name = country_parts[0]
+                                            flag = country_parts[1] if len(country_parts) > 1 else "🌐"
 
-                                                    # 🌟 RS OTP BOT STYLE DESIGN
-                                                    msg_body = (
-                                                        f"{flag} {country_name} {service_title} Otp Code Received Successfully 🎉\n\n"
-                                                        f"🔐 <b>Your OTP:</b> <code>{otp_code}</code>\n\n"
-                                                        f"☎️ <b>Number:</b> <code>{exact_range}</code>\n"
-                                                        f"⚙️ <b>Service:</b> {service_title}\n"
-                                                        f"🌍 <b>Country:</b> {country_info}\n\n"
-                                                        f"📩 <b>Full-Message:</b>\n"
-                                                        f"<code>{full_text}</code>"
-                                                    )
-                                                    
-                                                    markup = telebot.types.InlineKeyboardMarkup(row_width=2)
-                                                    markup.add(
-                                                        telebot.types.InlineKeyboardButton("🚀 Panel", url="https://t.me/"),
-                                                        telebot.types.InlineKeyboardButton("🛒 Buy IP", url="https://t.me/")
-                                                    )
-                                                    
-                                                    try:
-                                                        bot.send_message(GROUP_ID, msg_body, parse_mode="HTML", reply_markup=markup, disable_notification=True)
-                                                        print(f"✅ PAID OTP Sent >> {service_title} | Number: {exact_range}")
-                                                        time.sleep(2.5) 
-                                                    except Exception as e:
-                                                        print(f"❌ Telegram Error: {e}")
-                                                        
+                                            # 🌟 RS OTP BOT STYLE DESIGN
+                                            msg_body = (
+                                                f"{flag} {country_name} {service_title} Otp Code Received Successfully 🎉\n\n"
+                                                f"🔐 <b>Your OTP:</b> <code>{otp_code}</code>\n\n"
+                                                f"☎️ <b>Number:</b> <code>{exact_range}</code>\n"
+                                                f"⚙️ <b>Service:</b> {service_title}\n"
+                                                f"🌍 <b>Country:</b> {country_info}\n\n"
+                                                f"📩 <b>Full-Message:</b>\n"
+                                                f"<code>{full_text}</code>"
+                                            )
+                                            
+                                            markup = telebot.types.InlineKeyboardMarkup(row_width=2)
+                                            markup.add(
+                                                telebot.types.InlineKeyboardButton("🚀 Panel", url="https://t.me/"),
+                                                telebot.types.InlineKeyboardButton("🛒 Buy IP", url="https://t.me/")
+                                            )
+                                            
+                                            try:
+                                                bot.send_message(GROUP_ID, msg_body, parse_mode="HTML", reply_markup=markup, disable_notification=True)
+                                                print(f"✅ PAID OTP Sent >> {service_title} | Number: {exact_range}")
+                                            except Exception as e:
+                                                print(f"❌ Telegram Error: {e}")
+                                                
+                                time.sleep(0.5) # সার্ভার যেন ব্লক না করে তাই হালকা বিরতি
+                                
                         if is_first_run:
                             print("✅ Pre-loaded old OTPs successfully! Now waiting for new ones...")
                             is_first_run = False
                             
                         error_count = 0 
                         
-                    elif response.status_code in [401, 403, 419]:
-                        print(f"🚨 Session Expired (Code {response.status_code}). Restarting auto-login...")
+                    elif res_ranges.status_code in [401, 403, 419]:
+                        print(f"🚨 Session Expired (Code {res_ranges.status_code}). Restarting login...")
                         break 
                     else:
                         error_count += 1
-                            
+                        print(f"⚠️ API Error {res_ranges.status_code}. Retrying...")
+                        
                 except Exception as e:
-                    print(f"⚠️ Fetch Error: {e}")
+                    print(f"⚠️ Script Execution Error: {e}")
                     error_count += 1
                     
-                time.sleep(8) # প্রতি ৮ সেকেন্ড পরপর "Get SMS" বাটনে ক্লিক করবে
+                time.sleep(8) # প্রতি ৮ সেকেন্ড পরপর "Get SMS" বাটনের কাজ করবে
                 
-            print("🔄 Connection lost or Session expired. Going back to Steal Cookies...")
+            print("🔄 Browser Session lost. Restarting the whole process...")
             
         except Exception as e:
             print(f"🔥 Critical System Error! Self-healing in 10s... Details: {e}")
             time.sleep(10)
 
 if __name__ == "__main__":
-    print("🤖 Paid SMS Bot is turning on (100% Human 'Get SMS' Simulator!)...")
+    print("🤖 Paid SMS Bot is turning on (Smart 3-Step Manual Click Simulator!)...")
     threading.Thread(target=monitor_ranges, daemon=True).start()
     
     while True:
