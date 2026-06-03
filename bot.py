@@ -47,10 +47,10 @@ COUNTRY_DICT = {
     "51": ("Peru", "🇵🇪"), "52": ("Mexico", "🇲🇽"), "53": ("Cuba", "🇨🇺"), 
     "54": ("Argentina", "🇦🇷"), "55": ("Brazil", "🇧🇷"), "57": ("Colombia", "🇨🇴"), 
     "60": ("Malaysia", "🇲🇾"), "61": ("Australia", "🇦🇺"), "62": ("Indonesia", "🇮🇩"), 
-    "63": ("Philippines", "🇵🇭"), "66": ("Thailand", "🇹🇭"), "81": ("Japan", "🇯🇵"), 
-    "82": ("South Korea", "🇰🇷"), "84": ("Vietnam", "🇻🇳"), "86": ("China", "🇨🇳"), 
-    "90": ("Turkey", "🇹🇷"), "91": ("India", "🇮🇳"), "92": ("Pakistan", "🇵🇰"), 
-    "93": ("Afghanistan", "🇦🇫"), "94": ("Sri Lanka", "🇱🇰"), "95": ("Myanmar", "🇲🇲"), 
+    "63": ("Philippines", "🇵🇭"), "64": ("New Zealand", "🇳🇿"), "65": ("Singapore", "🇸🇬"), 
+    "66": ("Thailand", "🇹🇭"), "81": ("Japan", "🇯🇵"), "82": ("South Korea", "🇰🇷"), 
+    "84": ("Vietnam", "🇻🇳"), "86": ("China", "🇨🇳"), "90": ("Turkey", "🇹🇷"), 
+    "91": ("India", "🇮🇳"), "92": ("Pakistan", "🇵🇰"), "93": ("Afghanistan", "🇦🇫"), 
     "98": ("Iran", "🇮🇷"), "212": ("Morocco", "🇲🇦"), "234": ("Nigeria", "🇳🇬"), 
     "249": ("Sudan", "🇸🇩"), "251": ("Ethiopia", "🇪🇹"), "254": ("Kenya", "🇰🇪"), 
     "351": ("Portugal", "🇵🇹"), "380": ("Ukraine", "🇺🇦"), "880": ("Bangladesh", "🇧🇩"), 
@@ -198,7 +198,7 @@ def monitor_ranges():
                 time.sleep(30)
                 continue
                 
-            print("⚡ Starting Smart '3-Step' Scraper (Visual AI Extractor)...")
+            print("⚡ Starting Smart '3-Step' Scraper (Raw Digit Extractor)...")
             scraper = cloudscraper.create_scraper()
             scraper.cookies.update(cookie_dict)
             
@@ -216,11 +216,13 @@ def monitor_ranges():
             loop_heartbeat = 0
             
             while error_count < 5:
-                today_date = time.strftime("%Y-%m-%d")
+                start_date = (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
+                end_date = (datetime.utcnow() + timedelta(days=1)).strftime("%Y-%m-%d")
+                
                 base_payload = {
                     "_token": page_token,
-                    "start": today_date,
-                    "end": today_date
+                    "start": start_date,
+                    "end": end_date
                 }
                 
                 try:
@@ -246,15 +248,9 @@ def monitor_ranges():
                             res_num = scraper.post("https://www.ivasms.com/portal/sms/received/getsms/number", headers=headers, data=payload_num, timeout=15)
                             
                             if res_num.status_code == 200:
-                                # 🧠 AI VISUAL EXTRACTOR (যেকোনো ৮-১৫ ডিজিটের নাম্বার খুঁজে আনবে)
-                                soup_num = BeautifulSoup(res_num.text, 'html.parser')
-                                visual_texts = list(soup_num.stripped_strings)
-                                nums_from_text = [t for t in visual_texts if t.isdigit() and len(t) >= 8]
+                                # 🧠 AI VISUAL EXTRACTOR (যেকোনো ৮-১৫ ডিজিটের নাম্বার সরাসরি বের করবে!)
+                                numbers = list(set(re.findall(r'(?<!\d)\d{8,15}(?!\d)', res_num.text)))
                                 
-                                nums_from_regex = re.findall(r"toggle[A-Za-z0-9_]*\(['\"]([^'\"]+)['\"]", res_num.text)
-                                nums_from_regex = [n for n in nums_from_regex if n.isdigit() and len(n) >= 8]
-                                
-                                numbers = list(set(nums_from_text + nums_from_regex))
                                 total_active_nums += len(numbers)
                                 
                                 if not numbers:
@@ -331,7 +327,7 @@ def monitor_ranges():
                             print("✅ Pre-loaded old OTPs successfully! Now waiting for new ones...")
                             is_first_run = False
                             
-                        # 📡 লাইভ হার্টবিট (লগ যেন আটকে না থাকে)
+                        # 📡 লাইভ হার্টবিট 
                         loop_heartbeat += 1
                         if loop_heartbeat % 3 == 0:
                             print(f"📡 Heartbeat: Scanned {len(ranges)} Ranges, Found {total_active_nums} Numbers. Waiting for new OTPs...")
@@ -358,7 +354,7 @@ def monitor_ranges():
             time.sleep(10)
 
 if __name__ == "__main__":
-    print("🤖 Paid SMS Bot is turning on (Smart AI Digit Extractor + Heartbeat!)...")
+    print("🤖 Paid SMS Bot is turning on (Smart Raw Digit Extractor applied!)...")
     threading.Thread(target=monitor_ranges, daemon=True).start()
     
     while True:
