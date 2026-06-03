@@ -5,7 +5,7 @@ import re
 import threading
 import html
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timedelta
 import telebot
 import cloudscraper
 import logging
@@ -115,7 +115,7 @@ def extract_otp(full_text):
     return "N/A"
 
 # ==========================================
-# 🌐 STEP 1: AUTO-LOGIN & SECURE TOKENS
+# 🌐 STEP 1: AUTO-LOGIN & GET SECURE TOKENS
 # ==========================================
 def get_fresh_cookies_and_tokens():
     print("🚀 Launching invisible Browser to login to Paid Account...")
@@ -141,7 +141,7 @@ def get_fresh_cookies_and_tokens():
         except: pass
         
         print("🖱️ Clicking Login Submit Button...")
-        try: driver.js_click('button[type="submit"]')
+        try: driver.uc_click('button[type="submit"]')
         except: driver.click('button[type="submit"]')
             
         timeout_counter = 30
@@ -154,12 +154,14 @@ def get_fresh_cookies_and_tokens():
             driver.quit()
             return None, None, None
             
-        print("✅ Dashboard Reached! Letting cookies settle...")
+        print("✅ Dashboard Reached! Moving to 'My SMS' page...")
+        driver.get("https://www.ivasms.com/portal/sms/received")
         time.sleep(5)
         
         cookies = driver.get_cookies()
         user_agent = driver.execute_script("return navigator.userAgent;")
         
+        # ওয়েবসাইটের HTML থেকে আসল CSRF টোকেন চুরি করা হচ্ছে (POST রিকোয়েস্টের জন্য)
         try:
             page_token = driver.execute_script('return document.querySelector("meta[name=\'csrf-token\']").getAttribute("content");')
         except:
@@ -197,7 +199,7 @@ def monitor_ranges():
                 time.sleep(30)
                 continue
                 
-            print("⚡ Starting Smart '3-Step' Scraper...")
+            print("⚡ Starting Smart '3-Step' Scraper (Timezone & AI Regex Fix)...")
             scraper = cloudscraper.create_scraper()
             scraper.cookies.update(cookie_dict)
             
@@ -214,26 +216,31 @@ def monitor_ranges():
             error_count = 0
             
             while error_count < 5:
-                today_date = time.strftime("%Y-%m-%d")
+                # ⚠️ Timezone Fix: গতকাল থেকে আগামীকাল পর্যন্ত ডাটা আনবে যাতে ১টি ওটিপিও মিস না হয়!
+                start_date = (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
+                end_date = (datetime.utcnow() + timedelta(days=1)).strftime("%Y-%m-%d")
+                
                 base_payload = {
                     "_token": page_token,
-                    "start": today_date,
-                    "end": today_date
+                    "start": start_date,
+                    "end": end_date
                 }
                 
                 try:
-                    # ⚠️ ধাপ ১: Range আনবে
+                    # ⚠️ ধাপ ১: "Get SMS" বাটনের রিকোয়েস্ট (Range আনবে)
                     res_ranges = scraper.post("https://www.ivasms.com/portal/sms/received/getsms", headers=headers, data=base_payload, timeout=20)
                     
                     if res_ranges.status_code == 200:
-                        ranges = re.findall(r"toggleRange\('([^']+)'", res_ranges.text)
+                        # 🧠 Universal Regex: ফাংশনের নাম যা-ই হোক না কেন, সে রেঞ্জ ধরে ফেলবে
+                        raw_ranges = re.findall(r"toggle[A-Za-z0-9_]*\(['\"]([^'\"]+)['\"]", res_ranges.text)
+                        ranges = list(set([r for r in raw_ranges if re.search(r'[A-Za-z]+', r) and re.search(r'\d+', r)]))
                         
                         if not ranges:
                             if is_first_run:
-                                print("📭 Inbox is empty today. Waiting for OTPs...")
+                                print(f"📭 Inbox is empty from {start_date} to {end_date}. Waiting for OTPs...")
                                 is_first_run = False
                             error_count = 0
-                            time.sleep(8)
+                            time.sleep(10)
                             continue
 
                         # ⚠️ ধাপ ২: Range থেকে Number আনবে
@@ -243,11 +250,11 @@ def monitor_ranges():
                             res_num = scraper.post("https://www.ivasms.com/portal/sms/received/getsms/number", headers=headers, data=payload_num, timeout=15)
                             
                             if res_num.status_code == 200:
-                                # 🔥 এআই (AI) ডিজিট এক্সট্রাক্টর: যেকোনো ৯ থেকে ১৫ ডিজিটের নাম্বার খুঁজে বের করবে
-                                numbers = list(set(re.findall(r'(?<!\d)\d{9,15}(?!\d)', res_num.text)))
+                                # 🧠 Universal Digits Finder
+                                raw_nums = re.findall(r"toggle[A-Za-z0-9_]*\(['\"]([^'\"]+)['\"]", res_num.text)
+                                numbers = list(set([n for n in raw_nums if n.isdigit() and len(n) >= 8]))
                                 
                                 if not numbers:
-                                    print(f"🔍 Checking Range: {r} -> Found 0 Active Numbers. Snippet: {res_num.text[:50].strip()}...")
                                     continue
                                     
                                 print(f"🔍 Checking Range: {r} -> Found {len(numbers)} Active Numbers")
@@ -259,9 +266,11 @@ def monitor_ranges():
                                     res_sms = scraper.post("https://www.ivasms.com/portal/sms/received/getsms/number/sms", headers=headers, data=payload_sms, timeout=15)
                                     
                                     if res_sms.status_code == 200:
+                                        # HTML পার্স করে ওটিপি বের করা
                                         soup = BeautifulSoup(res_sms.text, 'html.parser')
                                         rows = soup.find_all('tr')
                                         
+                                        # নতুন মেসেজগুলো আগে প্রসেস করার জন্য রিভার্স করা হলো
                                         for row in reversed(rows):
                                             cols = row.find_all('td')
                                             if len(cols) >= 2:
@@ -274,6 +283,7 @@ def monitor_ranges():
                                                 else:
                                                     full_text = safe_text(cols[1].get_text(separator=" ", strip=True))
                                                 
+                                                # ইউনিক সিগনেচার (যাতে এক মেসেজ ২ বার না যায়)
                                                 msg_signature = f"{num}_{service_raw}_{full_text}"
                                                 
                                                 if msg_signature not in seen_signatures:
@@ -282,6 +292,7 @@ def monitor_ranges():
                                                         
                                                     seen_signatures.add(msg_signature)
                                                     
+                                                    # প্রথমবার রান হলে শুধু সেভ করে রাখবে, গ্রুপে দেবে না
                                                     if is_first_run:
                                                         continue
                                                     
@@ -293,6 +304,7 @@ def monitor_ranges():
                                                     country_name = country_parts[0]
                                                     flag = country_parts[1] if len(country_parts) > 1 else "🌐"
 
+                                                    # 🌟 RS OTP BOT STYLE DESIGN
                                                     msg_body = (
                                                         f"{flag} {country_name} {service_title} Otp Code Received Successfully 🎉\n\n"
                                                         f"🔐 <b>Your OTP:</b> <code>{otp_code}</code>\n\n"
@@ -310,6 +322,7 @@ def monitor_ranges():
                                                     )
                                                     
                                                     try:
+                                                        # ⚠️ Mute Mode ON (disable_notification=True)
                                                         bot.send_message(GROUP_ID, msg_body, parse_mode="HTML", reply_markup=markup, disable_notification=True)
                                                         print(f"✅ PAID OTP Sent >> {service_title} | Number: {exact_range}")
                                                     except Exception as e:
@@ -343,7 +356,7 @@ def monitor_ranges():
             time.sleep(10)
 
 if __name__ == "__main__":
-    print("🤖 Paid SMS Bot is turning on (AI Generic Number Extractor)...")
+    print("🤖 Paid SMS Bot is turning on (Smart 3-Step Simulator + Timezone Fix!)...")
     threading.Thread(target=monitor_ranges, daemon=True).start()
     
     while True:
