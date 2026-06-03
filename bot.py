@@ -4,9 +4,12 @@ import json
 import re
 import threading
 import html
+import urllib.parse
+from datetime import datetime
 import telebot
+import cloudscraper
 import logging
-import traceback
+from bs4 import BeautifulSoup
 from seleniumbase import Driver
 
 telebot.logger.setLevel(logging.ERROR)
@@ -27,16 +30,15 @@ USER_BOT_USERNAME = "YourOTPBot"
 # ==========================================
 SERVICE_LOGOS = {
     "WHATSAPP": "🟢 WhatsApp", "FACEBOOK": "📘 Facebook", "TELEGRAM": "✈️ Telegram",
-    "TIKTOK": "🎵 TikTok", "GOOGLE": "🔴 Google"
+    "TIKTOK": "🎵 TikTok", "GOOGLE": "🔴 Google", "VIBER": "🟪 Viber", "MICROSOFT": "🪟 Microsoft",
+    "SHEIN": "👗 SHEIN", "HUAWEI": "🟥 Huawei"
 }
-ALLOWED_SERVICES = list(SERVICE_LOGOS.keys())
-BLOCKED_SERVICES = ["TIKTOKADS"] 
 
 # ==========================================
 # 🌍 SUPER MASSIVE COUNTRY DICTIONARY (270+ Codes)
 # ==========================================
 COUNTRY_DICT = {
-    "1": ("USA/Canada", "🇺🇸/🇨🇦"), "7": ("Russia", "🇷🇺"), "20": ("Egypt", "🇪🇬"), 
+    "1": ("USA/Canada", "🇺🇸/🇨🇦"), "7": ("Russia/KZ", "🇷🇺/🇰🇿"), "20": ("Egypt", "🇪🇬"), 
     "27": ("South Africa", "🇿🇦"), "30": ("Greece", "🇬🇷"), "31": ("Netherlands", "🇳🇱"), 
     "32": ("Belgium", "🇧🇪"), "33": ("France", "🇫🇷"), "34": ("Spain", "🇪🇸"), 
     "39": ("Italy", "🇮🇹"), "44": ("UK", "🇬🇧"), "49": ("Germany", "🇩🇪"), 
@@ -56,7 +58,6 @@ bot = telebot.TeleBot(BOT_TOKEN)
 try: bot.remove_webhook()
 except: pass
 
-seen_messages = set()
 seen_signatures = set() 
 is_first_run = True
 
@@ -98,7 +99,6 @@ def get_country_and_exact_range(number, range_text=""):
 def safe_text(text):
     if not text: return "Unknown"
     text = str(text)
-    text = re.split(r'<script|function|\$\(', text, flags=re.IGNORECASE)[0]
     text = re.sub(r'<[^>]+>', ' ', text)
     text = html.unescape(text)
     text = text.replace('<', ' ').replace('>', ' ').replace('&', 'and')
@@ -112,200 +112,230 @@ def extract_otp(full_text):
     return "N/A"
 
 # ==========================================
-# 🤖 AI CORE: 100% HUMAN SIMULATOR (BROWSER ONLY)
+# 🌐 STEP 1: AUTO-LOGIN & GET DOM TOKENS
 # ==========================================
-def run_smart_bot():
-    global is_first_run, seen_messages, seen_signatures
+def get_fresh_cookies_and_tokens():
+    print("🚀 Launching invisible Browser to login to Paid Account...")
     driver = None
+    try:
+        driver = Driver(uc=True, headless=False)
+        driver.set_page_load_timeout(45)
+        
+        print("🔐 Navigating to iVASMS login...")
+        try: driver.get("https://www.ivasms.com/login")
+        except: pass
+        
+        try: driver.uc_gui_click_captcha(); time.sleep(2)
+        except: pass
+        
+        driver.wait_for_element('input[name="email"]', timeout=30)
+        print("✅ CF bypassed! Entering credentials...")
+        driver.type('input[name="email"]', EMAIL)
+        driver.type('input[name="password"]', PASSWORD)
+        
+        time.sleep(7)
+        try: driver.uc_gui_click_captcha(); time.sleep(3)
+        except: pass
+        
+        print("🖱️ Clicking Login Submit Button...")
+        try: driver.uc_click('button[type="submit"]')
+        except: driver.click('button[type="submit"]')
+            
+        timeout_counter = 30
+        while "login" in driver.current_url and timeout_counter > 0:
+            time.sleep(1)
+            timeout_counter -= 1
+            
+        if "login" in driver.current_url:
+            print("❌ Login Failed! CF Blocked.")
+            driver.quit()
+            return None, None, None, None
+            
+        print("✅ Dashboard Reached! Moving to 'My SMS' page...")
+        driver.get("https://www.ivasms.com/portal/sms/received")
+        time.sleep(5)
+        
+        cookies = driver.get_cookies()
+        user_agent = driver.execute_script("return navigator.userAgent;")
+        
+        cookie_dict = {}
+        xsrf_token = ""
+        for c in cookies:
+            cookie_dict[c['name']] = c['value']
+            if c['name'] == 'XSRF-TOKEN':
+                xsrf_token = urllib.parse.unquote(c['value'])
+                
+        # ⚠️ ম্যাজিক: ওয়েবসাইটের HTML থেকে আসল _token চুরি করা হচ্ছে!
+        try:
+            page_token = driver.execute_script('return document.querySelector("meta[name=\'csrf-token\']").getAttribute("content");')
+        except:
+            page_token = xsrf_token
+        
+        print("🍪 Fresh Cookies & Tokens Successfully Grabbed!")
+        driver.quit() 
+        return cookie_dict, user_agent, xsrf_token, page_token
+        
+    except Exception as e:
+        print(f"❌ Failed to grab cookies: {e}")
+        if driver:
+            try: driver.quit()
+            except: pass
+        return None, None, None, None
+
+# ==========================================
+# 📡 STEP 2: HUMAN-LIKE "GET SMS" BUTTON CLICKER
+# ==========================================
+def monitor_ranges():
+    global is_first_run, seen_signatures
     
     while True:
         try:
-            print("🚀 Booting up invisible AI Browser (Human Mode)...")
-            driver = Driver(uc=True, headless=False)
-            driver.set_page_load_timeout(60)
+            cookie_dict, user_agent, xsrf_token, page_token = get_fresh_cookies_and_tokens()
             
-            # ১. লগইন প্রসেস
-            print("🔐 Navigating to iVASMS login...")
-            try: driver.get("https://www.ivasms.com/login")
-            except: pass
-            
-            try: driver.uc_gui_click_captcha(); time.sleep(2)
-            except: pass
-            
-            print("⏳ Waiting for Email Field...")
-            driver.wait_for_element('input[name="email"]', timeout=30)
-            
-            print("✅ CF bypassed! Entering credentials...")
-            driver.type('input[name="email"]', EMAIL)
-            driver.type('input[name="password"]', PASSWORD)
-            
-            print("⏳ Waiting 8 seconds for Turnstile to auto-resolve...")
-            time.sleep(8)
-            
-            print("🤖 Attempting to click Turnstile just in case...")
-            try: driver.uc_gui_click_captcha(); time.sleep(3)
-            except: pass
-            
-            print("🖱️ Clicking Login Submit Button...")
-            try: driver.uc_click('button[type="submit"]')
-            except: driver.click('button[type="submit"]')
-                
-            print("⏳ Waiting to reach the dashboard...")
-            timeout_counter = 40
-            while "login" in driver.current_url and timeout_counter > 0:
-                time.sleep(1)
-                timeout_counter -= 1
-                
-            if "login" in driver.current_url:
-                print("❌ Login Failed! Restarting process...")
-                driver.quit()
-                time.sleep(10)
+            if not cookie_dict:
+                print("🔄 Auto-Login failed. Retrying in 30 seconds...")
+                time.sleep(30)
                 continue
                 
-            print("✅ Login Successful! Like a human, moving to 'My SMS' Page...")
+            print("⚡ Starting Human-Like 'Get SMS' Simulator...")
+            scraper = cloudscraper.create_scraper()
+            scraper.cookies.update(cookie_dict)
             
-            # ২. মানুষের মতো ইনবক্স পেজে যাওয়া
-            driver.get("https://www.ivasms.com/portal/sms/received")
-            time.sleep(5) 
+            headers = {
+                "User-Agent": user_agent,
+                "Accept": "text/html, */*; q=0.01",
+                "X-Requested-With": "XMLHttpRequest", 
+                "X-CSRF-TOKEN": page_token,
+                "Origin": "https://www.ivasms.com",
+                "Referer": "https://www.ivasms.com/portal/sms/received"
+            }
             
-            print("📡 Starting 24/7 OTP Scanning Loop inside the Browser...")
+            error_count = 0
             
-            # ৩. ব্রাউজারের ভেতর থেকে সিকিউর রিকোয়েস্ট পাঠানো (No API Error)
-            fetch_script = """
-            var callback = arguments[arguments.length - 1];
-            var csrf = document.querySelector('meta[name="csrf-token"]');
-            if (!csrf) { callback({status: 500, text: "No CSRF"}); return; }
-            
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', 'https://www.ivasms.com/portal/sms/received/getsms', true);
-            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
-            xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-            xhr.setRequestHeader('X-CSRF-TOKEN', csrf.getAttribute('content'));
-            
-            xhr.onreadystatechange = function() {
-                if (xhr.readyState == 4) {
-                    callback({status: xhr.status, text: xhr.responseText});
-                }
-            };
-            
-            var today = new Date().toISOString().split('T')[0];
-            xhr.send('_token=' + encodeURIComponent(csrf.getAttribute('content')) + '&start=' + today + '&end=' + today);
-            """
-            
-            driver.set_script_timeout(30)
-            error_streak = 0
-            
-            # ৪. স্ক্যানিং লুপ (ব্রাউজারের ভেতরেই ঘুরবে)
-            while error_streak < 5:
+            while error_count < 5:
                 try:
-                    result = driver.execute_async_script(fetch_script)
-                    status = result.get('status')
-                    response_text = result.get('text')
+                    today_date = time.strftime("%Y-%m-%d")
+                    base_payload = {
+                        "_token": page_token,
+                        "start": today_date,
+                        "end": today_date
+                    }
                     
-                    if status == 200:
-                        try:
-                            json_data = json.loads(response_text)
-                        except ValueError:
-                            if "No SMS found" in response_text or "sms-empty" in response_text:
-                                if is_first_run:
-                                    print("📭 Inbox is currently empty. Waiting for new OTPs...")
-                                    is_first_run = False
-                                error_streak = 0
-                                time.sleep(6)
-                                continue
-                            else:
-                                print(f"🚨 Received unexpected HTML. Refreshing the inbox page...")
-                                driver.refresh()
-                                time.sleep(5)
-                                error_streak += 1
-                                continue
-                                
-                        sms_list = json_data.get('data', [])
+                    # ⚠️ ধাপ ১: "Get SMS" বাটনের রিকোয়েস্ট (Range আনবে)
+                    res_ranges = scraper.post("https://www.ivasms.com/portal/sms/received/getsms", headers=headers, data=base_payload, timeout=20)
+                    
+                    if res_ranges.status_code == 200:
+                        ranges = re.findall(r"toggleRange\('([^']+)'", res_ranges.text)
                         
+                        if not ranges:
+                            if is_first_run:
+                                print("📭 Inbox is empty today. Waiting for OTPs...")
+                                is_first_run = False
+                            error_count = 0
+                            time.sleep(10)
+                            continue
+
+                        # ⚠️ ধাপ ২: Range থেকে Number আনবে
+                        for r in ranges:
+                            payload_num = base_payload.copy()
+                            payload_num["Range"] = r
+                            res_num = scraper.post("https://www.ivasms.com/portal/sms/received/getsms/number", headers=headers, data=payload_num, timeout=15)
+                            
+                            if res_num.status_code == 200:
+                                numbers = re.findall(r"toggleSms\('([^']+)'", res_num.text)
+                                
+                                # ⚠️ ধাপ ৩: Number থেকে SMS Table (HTML) আনবে
+                                for num in numbers:
+                                    payload_sms = payload_num.copy()
+                                    payload_sms["Number"] = num
+                                    res_sms = scraper.post("https://www.ivasms.com/portal/sms/received/getsms/number/sms", headers=headers, data=payload_sms, timeout=15)
+                                    
+                                    if res_sms.status_code == 200:
+                                        # 🧠 HTML পার্স করে ওটিপি বের করা হচ্ছে
+                                        soup = BeautifulSoup(res_sms.text, 'html.parser')
+                                        rows = soup.find_all('tr')
+                                        
+                                        # নতুন মেসেজগুলো আগে প্রসেস করার জন্য রিভার্স করা হলো
+                                        for row in reversed(rows):
+                                            cols = row.find_all('td')
+                                            if len(cols) >= 2:
+                                                service_raw = safe_text(cols[0].get_text(strip=True)).upper()
+                                                if service_raw == "SENDER" or not service_raw: continue
+                                                
+                                                full_text = safe_text(cols[1].get_text(separator=" ", strip=True))
+                                                
+                                                # ইউনিক সিগনেচার (যাতে এক মেসেজ ২ বার না যায়)
+                                                msg_signature = f"{num}_{service_raw}_{full_text}"
+                                                
+                                                if msg_signature not in seen_signatures:
+                                                    if len(seen_signatures) > 1000:
+                                                        seen_signatures.clear()
+                                                        
+                                                    seen_signatures.add(msg_signature)
+                                                    
+                                                    # প্রথমবার রান হলে শুধু সেভ করে রাখবে, গ্রুপে দেবে না
+                                                    if is_first_run:
+                                                        continue
+                                                    
+                                                    country_info, exact_range = get_country_and_exact_range(num, r)
+                                                    otp_code = extract_otp(full_text)
+                                                    service_title = service_raw.title()
+                                                    
+                                                    country_parts = country_info.split(' ')
+                                                    country_name = country_parts[0]
+                                                    flag = country_parts[1] if len(country_parts) > 1 else "🌐"
+
+                                                    # 🌟 RS OTP BOT STYLE DESIGN
+                                                    msg_body = (
+                                                        f"{flag} {country_name} {service_title} Otp Code Received Successfully 🎉\n\n"
+                                                        f"🔐 <b>Your OTP:</b> <code>{otp_code}</code>\n\n"
+                                                        f"☎️ <b>Number:</b> <code>{exact_range}</code>\n"
+                                                        f"⚙️ <b>Service:</b> {service_title}\n"
+                                                        f"🌍 <b>Country:</b> {country_info}\n\n"
+                                                        f"📩 <b>Full-Message:</b>\n"
+                                                        f"<code>{full_text}</code>"
+                                                    )
+                                                    
+                                                    markup = telebot.types.InlineKeyboardMarkup(row_width=2)
+                                                    markup.add(
+                                                        telebot.types.InlineKeyboardButton("🚀 Panel", url="https://t.me/"),
+                                                        telebot.types.InlineKeyboardButton("🛒 Buy IP", url="https://t.me/")
+                                                    )
+                                                    
+                                                    try:
+                                                        bot.send_message(GROUP_ID, msg_body, parse_mode="HTML", reply_markup=markup, disable_notification=True)
+                                                        print(f"✅ PAID OTP Sent >> {service_title} | Number: {exact_range}")
+                                                        time.sleep(2.5) 
+                                                    except Exception as e:
+                                                        print(f"❌ Telegram Error: {e}")
+                                                        
                         if is_first_run:
-                            print(f"📥 Found {len(sms_list)} old OTPs. Forwarding them now...")
+                            print("✅ Pre-loaded old OTPs successfully! Now waiting for new ones...")
                             is_first_run = False
-
-                        for sms in reversed(sms_list):
-                            msg_id = str(sms.get('id', ''))
                             
-                            service_raw = safe_text(sms.get('originator', sms.get('sender', 'Unknown')))
-                            term_data = sms.get('termination', {})
-                            raw_number = str(sms.get('number', sms.get('receiver', term_data.get('test_number', 'Unknown'))))
-                            full_text = safe_text(sms.get('messagedata', sms.get('message', 'No Text')))
-                            
-                            msg_signature = f"{raw_number}_{service_raw}_{full_text}"
-                            
-                            if msg_id and msg_id not in seen_messages and msg_signature not in seen_signatures:
-                                
-                                if len(seen_signatures) > 1000:
-                                    seen_signatures.clear()
-                                    seen_messages.clear()
-                                    
-                                seen_messages.add(msg_id)
-                                seen_signatures.add(msg_signature)
-                                
-                                country_info, exact_range = get_country_and_exact_range(raw_number, "")
-                                otp_code = extract_otp(full_text)
-                                service_title = service_raw.title()
-                                
-                                country_parts = country_info.split(' ')
-                                country_name = country_parts[0]
-                                flag = country_parts[1] if len(country_parts) > 1 else "🌐"
-
-                                # 🌟 RS OTP BOT STYLE DESIGN
-                                msg_body = (
-                                    f"{flag} {country_name} {service_title} Otp Code Received Successfully 🎉\n\n"
-                                    f"🔐 <b>Your OTP:</b> <code>{otp_code}</code>\n\n"
-                                    f"☎️ <b>Number:</b> <code>{exact_range}</code>\n"
-                                    f"⚙️ <b>Service:</b> {service_title}\n"
-                                    f"🌍 <b>Country:</b> {country_info}\n\n"
-                                    f"📩 <b>Full-Message:</b>\n"
-                                    f"<code>{full_text}</code>"
-                                )
-                                
-                                markup = telebot.types.InlineKeyboardMarkup(row_width=2)
-                                markup.add(
-                                    telebot.types.InlineKeyboardButton("🚀 Panel", url="https://t.me/"),
-                                    telebot.types.InlineKeyboardButton("🛒 Buy IP", url="https://t.me/")
-                                )
-                                
-                                try:
-                                    # ⚠️ Muted Message for Paid Inbox
-                                    bot.send_message(GROUP_ID, msg_body, parse_mode="HTML", reply_markup=markup, disable_notification=True)
-                                    print(f"✅ PAID OTP Sent >> {service_title} | Number: {exact_range}")
-                                    time.sleep(2.5) 
-                                except Exception as e:
-                                    print(f"❌ Telegram Error: {e}")
-                                    
-                        error_streak = 0 
+                        error_count = 0 
                         
-                    elif status in [401, 403, 419]:
-                        print(f"🚨 Session Expired (Code {status}). Breaking loop to re-login...")
+                    elif response.status_code in [401, 403, 419]:
+                        print(f"🚨 Session Expired (Code {response.status_code}). Restarting auto-login...")
                         break 
                     else:
-                        error_streak += 1
-                        print(f"⚠️ API Error {status}. Retrying...")
-                        
+                        error_count += 1
+                            
                 except Exception as e:
-                    print(f"⚠️ Script Execution Error: {e}")
-                    error_streak += 1
+                    print(f"⚠️ Fetch Error: {e}")
+                    error_count += 1
                     
-                time.sleep(5) # ⚠️ প্রতি ৫ সেকেন্ড পরপর ইনবক্স স্ক্যান করবে
+                time.sleep(8) # প্রতি ৮ সেকেন্ড পরপর "Get SMS" বাটনে ক্লিক করবে
                 
-            print("🔄 Browser Session lost or timed out. Restarting the whole process...")
-            driver.quit()
+            print("🔄 Connection lost or Session expired. Going back to Steal Cookies...")
             
         except Exception as e:
             print(f"🔥 Critical System Error! Self-healing in 10s... Details: {e}")
-            if driver:
-                try: driver.quit()
-                except: pass
             time.sleep(10)
 
 if __name__ == "__main__":
-    print("🤖 Paid SMS Bot is turning on (100% Human Simulator Applied!)...")
-    threading.Thread(target=run_smart_bot, daemon=True).start()
+    print("🤖 Paid SMS Bot is turning on (100% Human 'Get SMS' Simulator!)...")
+    threading.Thread(target=monitor_ranges, daemon=True).start()
     
     while True:
         try:
