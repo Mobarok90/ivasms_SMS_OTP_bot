@@ -45,17 +45,60 @@ COUNTRY_DICT = {
     "32": ("Belgium", "🇧🇪"), "33": ("France", "🇫🇷"), "34": ("Spain", "🇪🇸"), 
     "39": ("Italy", "🇮🇹"), "44": ("UK", "🇬🇧"), "49": ("Germany", "🇩🇪"), 
     "51": ("Peru", "🇵🇪"), "52": ("Mexico", "🇲🇽"), "53": ("Cuba", "🇨🇺"), 
-    "54": ("Argentina", "🇦🇷"), "55": ("Brazil", "🇧🇷"), "57": ("Colombia", "🇨🇴"), 
-    "58": ("Venezuela", "🇻🇪"), "60": ("Malaysia", "🇲🇾"), "61": ("Australia", "🇦🇺"), 
-    "62": ("Indonesia", "🇮🇩"), "63": ("Philippines", "🇵🇭"), "64": ("New Zealand", "🇳🇿"), 
-    "65": ("Singapore", "🇸🇬"), "66": ("Thailand", "🇹🇭"), "81": ("Japan", "🇯🇵"), 
-    "82": ("South Korea", "🇰🇷"), "84": ("Vietnam", "🇻🇳"), "86": ("China", "🇨🇳"), 
-    "90": ("Turkey", "🇹🇷"), "91": ("India", "🇮🇳"), "92": ("Pakistan", "🇵🇰"), 
-    "93": ("Afghanistan", "🇦🇫"), "94": ("Sri Lanka", "🇱🇰"), "95": ("Myanmar", "🇲🇲"), 
-    "98": ("Iran", "🇮🇷"), "212": ("Morocco", "🇲🇦"), "234": ("Nigeria", "🇳🇬"), 
-    "249": ("Sudan", "🇸🇩"), "251": ("Ethiopia", "🇪🇹"), "254": ("Kenya", "🇰🇪"), 
-    "351": ("Portugal", "🇵🇹"), "380": ("Ukraine", "🇺🇦"), "880": ("Bangladesh", "🇧🇩"), 
-    "966": ("Saudi Arabia", "🇸🇦"), "971": ("UAE", "🇦🇪"), "998": ("Uzbekistan", "🇺🇿")
+    "54": ("Argentina", "🇦🇷"), "55": ("Brazil", "🇧🇷"), "56": ("Chile", "🇨🇱"), 
+    "57": ("Colombia", "🇨🇴"), "58": ("Venezuela", "🇻🇪"), "60": ("Malaysia", "🇲🇾"), 
+    "61": ("Australia", "🇦🇺"), "62": ("Indonesia", "🇮🇩"), "63": ("Philippines", "🇵🇭"), 
+    "64": ("New Zealand", "🇳🇿"), "65": ("Singapore", "🇸🇬"), "66": ("Thailand", "🇹🇭"), 
+    "81": ("Japan", "🇯🇵"), "82": ("South Korea", "🇰🇷"), "84": ("Vietnam", "🇻🇳"), 
+    "86": ("China", "🇨🇳"), "90": ("Turkey", "🇹🇷"), "91": ("India", "🇮🇳"), 
+    "92": ("Pakistan", "🇵🇰"), "93": ("Afghanistan", "🇦🇫"), "94": ("Sri Lanka", "🇱🇰"), 
+    "95": ("Myanmar", "🇲🇲"), "98": ("Iran", "🇮🇷"), "211": ("South Sudan", "🇸🇸"), 
+    "212": ("Morocco", "🇲🇦"), "213": ("Algeria", "🇩🇿"), "216": ("Tunisia", "🇹🇳"), 
+    "218": ("Libya", "🇱🇾"), "220": ("Gambia", "🇬🇲"), "221": ("Senegal", "🇸🇳"), 
+    "222": ("Mauritania", "🇲🇷"), "223": ("Mali", "🇲🇱"), "224": ("Guinea", "🇬🇳"), 
+    "225": ("Ivory Coast", "🇨🇮"), "226": ("Burkina Faso", "🇧🇫"), "227": ("Niger", "🇳🇪"), 
+    "228": ("Togo", "🇹🇬"), "229": ("Benin", "🇧🇯"), "230": ("Mauritius", "🇲🇺"), 
+    "231": ("Liberia", "🇱🇷"), "232": ("Sierra Leone", "🇸🇱"), "233": ("Ghana", "🇬🇭"), 
+    "234": ("Nigeria", "🇳🇬"), "235": ("Chad", "🇹🇩"), "236": ("CAR", "🇨🇫"), 
+    "237": ("Cameroon", "🇨🇲"), "238": ("Cape Verde", "🇨🇻"), "239": ("Sao Tome", "🇸🇹"), 
+    "240": ("Equatorial Guinea", "🇬🇶"), "241": ("Gabon", "🇬🇦"), "242": ("Congo", "🇨🇬"), 
+    "243": ("DR Congo", "🇨🇩"), "244": ("Angola", "🇦🇴"), "245": ("Guinea-Bissau", "🇬🇼"), 
+    "246": ("Diego Garcia", "🇮🇴"), "248": ("Seychelles", "🇸🇨"), "249": ("Sudan", "🇸🇩"), 
+    "250": ("Rwanda", "🇷🇼"), "251": ("Ethiopia", "🇪🇹"), "252": ("Somalia", "🇸🇴"), 
+    "253": ("Djibouti", "🇩🇯"), "254": ("Kenya", "🇰🇪"), "255": ("Tanzania", "🇹🇿"), 
+    "256": ("Uganda", "🇺🇬"), "257": ("Burundi", "🇧🇮"), "258": ("Mozambique", "🇲🇿"), 
+    "260": ("Zambia", "🇿🇲"), "261": ("Madagascar", "🇲🇬"), "262": ("Reunion", "🇷🇪"), 
+    "263": ("Zimbabwe", "🇿🇼"), "264": ("Namibia", "🇳🇦"), "265": ("Malawi", "🇲🇼"), 
+    "266": ("Lesotho", "🇱🇸"), "267": ("Botswana", "🇧🇼"), "268": ("Eswatini", "🇸🇿"), 
+    "269": ("Comoros", "🇰🇲"), "290": ("St Helena", "🇸🇭"), "291": ("Eritrea", "🇪🇷"), 
+    "297": ("Aruba", "🇦🇼"), "298": ("Faroe Islands", "🇫🇴"), "299": ("Greenland", "🇬🇱"), 
+    "350": ("Gibraltar", "🇬🇮"), "351": ("Portugal", "🇵🇹"), "352": ("Luxembourg", "🇱🇺"), 
+    "353": ("Ireland", "🇮🇪"), "354": ("Iceland", "🇮🇸"), "355": ("Albania", "🇦🇱"), 
+    "356": ("Malta", "🇲🇹"), "357": ("Cyprus", "🇨🇾"), "358": ("Finland", "🇫🇮"), 
+    "359": ("Bulgaria", "🇧🇬"), "370": ("Lithuania", "🇱🇹"), "371": ("Latvia", "🇱🇻"), 
+    "372": ("Estonia", "🇪🇪"), "373": ("Moldova", "🇲🇩"), "374": ("Armenia", "🇦🇲"), 
+    "375": ("Belarus", "🇧🇾"), "376": ("Andorra", "🇦🇩"), "377": ("Monaco", "🇲🇨"), 
+    "378": ("San Marino", "🇸🇲"), "379": ("Vatican City", "🇻🇦"), "380": ("Ukraine", "🇺🇦"), 
+    "381": ("Serbia", "🇷🇸"), "382": ("Montenegro", "🇲🇪"), "383": ("Kosovo", "🇽🇰"), 
+    "385": ("Croatia", "🇭🇷"), "386": ("Slovenia", "🇸🇮"), "387": ("Bosnia", "🇧🇦"), 
+    "389": ("North Macedonia", "🇲🇰"), "420": ("Czechia", "🇨🇿"), "421": ("Slovakia", "🇸🇰"), 
+    "423": ("Liechtenstein", "🇱🇮"), "500": ("Falkland", "🇫🇰"), "501": ("Belize", "🇧🇿"), 
+    "502": ("Guatemala", "🇬🇹"), "503": ("El Salvador", "🇸🇻"), "504": ("Honduras", "🇭🇳"), 
+    "505": ("Nicaragua", "🇳🇮"), "506": ("Costa Rica", "🇨🇷"), "507": ("Panama", "🇵🇦"), 
+    "508": ("St Pierre", "🇵🇲"), "509": ("Haiti", "🇭🇹"), "590": ("Guadeloupe", "🇬🇵"), 
+    "591": ("Bolivia", "🇧🇴"), "592": ("Guyana", "🇬🇾"), "593": ("Ecuador", "🇪🇨"), 
+    "594": ("French Guiana", "🇬🇫"), "595": ("Paraguay", "🇵🇾"), "596": ("Martinique", "🇲🇶"), 
+    "597": ("Suriname", "🇸🇷"), "598": ("Uruguay", "🇺🇾"), "599": ("Curacao", "🇨🇼"), 
+    "850": ("North Korea", "🇰🇵"), "852": ("Hong Kong", "🇭🇰"), "853": ("Macau", "🇲🇴"), 
+    "855": ("Cambodia", "🇰🇭"), "856": ("Laos", "🇱🇦"), "880": ("Bangladesh", "🇧🇩"), 
+    "886": ("Taiwan", "🇹🇼"), "960": ("Maldives", "🇲🇻"), "961": ("Lebanon", "🇱🇧"), 
+    "962": ("Jordan", "🇯🇴"), "963": ("Syria", "🇸🇾"), "964": ("Iraq", "🇮🇶"), 
+    "965": ("Kuwait", "🇰🇼"), "966": ("Saudi Arabia", "🇸🇦"), "967": ("Yemen", "🇾🇪"), 
+    "968": ("Oman", "🇴🇲"), "970": ("Palestine", "🇵🇸"), "971": ("UAE", "🇦🇪"), 
+    "972": ("Israel", "🇮🇱"), "973": ("Bahrain", "🇧🇭"), "974": ("Qatar", "🇶🇦"), 
+    "975": ("Bhutan", "🇧🇹"), "976": ("Mongolia", "🇲🇳"), "977": ("Nepal", "🇳🇵"), 
+    "992": ("Tajikistan", "🇹🇯"), "993": ("Turkmenistan", "🇹🇲"), "994": ("Azerbaijan", "🇦🇿"), 
+    "995": ("Georgia", "🇬🇪"), "996": ("Kyrgyzstan", "🇰🇬"), "998": ("Uzbekistan", "🇺🇿")
 }
 
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -199,7 +242,7 @@ def monitor_ranges():
                 time.sleep(30)
                 continue
                 
-            print("⚡ Starting Smart '3-Step' Scraper (X-Ray Extractor + Time Machine)...")
+            print("⚡ Starting Smart '3-Step' Scraper (Exact API Replication)...")
             scraper = cloudscraper.create_scraper()
             scraper.cookies.update(cookie_dict)
             
@@ -208,152 +251,141 @@ def monitor_ranges():
                 "Accept": "text/html, */*; q=0.01",
                 "X-Requested-With": "XMLHttpRequest", 
                 "X-CSRF-TOKEN": page_token,
-                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
                 "Origin": "https://www.ivasms.com",
                 "Referer": "https://www.ivasms.com/portal/sms/received"
             }
             
             error_count = 0
-            loop_heartbeat = 0
             
             while error_count < 5:
-                # ⚠️ Time Machine Fix: গত ৩ দিন থেকে আগামীকাল পর্যন্ত ডাটা আনবে!
-                start_date = (datetime.utcnow() - timedelta(days=3)).strftime("%Y-%m-%d")
-                end_date = (datetime.utcnow() + timedelta(days=1)).strftime("%Y-%m-%d")
+                # ⚠️ Timezone Fix: স্ক্যানিং যাতে মিস না হয় তাই গতকাল এবং আজকের ডেট একসাথে চেক করবে
+                date_list = [
+                    time.strftime("%Y-%m-%d"), # Today
+                    (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d") # Yesterday
+                ]
                 
-                base_payload = {
-                    "_token": page_token,
-                    "start": start_date,
-                    "end": end_date
-                }
+                total_active_nums = 0
                 
                 try:
-                    # ⚠️ ধাপ ১: Range আনবে
-                    res_ranges = scraper.post("https://www.ivasms.com/portal/sms/received/getsms", headers=headers, data=base_payload, timeout=20)
-                    
-                    if res_ranges.status_code == 200:
-                        # রেঞ্জগুলো বের করা (এগুলো সাধারণত 'COUNTRY 1234' ফরম্যাটে থাকে)
-                        ranges = re.findall(r"toggle[A-Za-z0-9_]*\(['\"]([^'\"]+)['\"]", res_ranges.text)
-                        ranges = list(set([r for r in ranges if re.search(r'[A-Za-z]+', r) and re.search(r'\d+', r)]))
+                    for target_date in date_list:
+                        # ⚠️ API 1 Payload: আপনার স্ক্রিনশট অনুযায়ী 'from' এবং 'to' দেওয়া হলো
+                        payload_ranges = {
+                            "_token": page_token,
+                            "from": target_date,
+                            "to": target_date
+                        }
                         
-                        if not ranges:
-                            print(f"📭 Inbox empty for dates: {start_date} to {end_date}. Waiting...")
-                            if is_first_run: is_first_run = False
-                            error_count = 0
-                            time.sleep(10)
-                            continue
-
-                        total_active_nums = 0
-
-                        # ⚠️ ধাপ ২: Range থেকে Number আনবে
-                        for r in ranges:
-                            payload_num = base_payload.copy()
-                            payload_num["Range"] = r
-                            res_num = scraper.post("https://www.ivasms.com/portal/sms/received/getsms/number", headers=headers, data=payload_num, timeout=15)
+                        # ⚠️ ধাপ ১: Range আনবে
+                        res_ranges = scraper.post("https://www.ivasms.com/portal/sms/received/getsms", headers=headers, data=payload_ranges, timeout=20)
+                        
+                        if res_ranges.status_code == 200:
+                            ranges = re.findall(r"toggleRange\('([^']+)'", res_ranges.text)
                             
-                            if res_num.status_code == 200:
-                                # 🧠 X-RAY DIGIT EXTRACTOR: HTML এর যেকোনো জায়গা থেকে ৮-১৬ ডিজিটের নাম্বার বের করবে
-                                raw_nums = re.findall(r'\b\d{8,16}\b', res_num.text)
-                                numbers = list(set(raw_nums))
+                            if not ranges:
+                                continue # এই ডেটে না পেলে পরের ডেটে খুঁজবে
+
+                            # ⚠️ ধাপ ২: Range থেকে Number আনবে (আপনার স্ক্রিনশট অনুযায়ী Payload)
+                            for r in ranges:
+                                payload_num = {
+                                    "_token": page_token,
+                                    "start": target_date,
+                                    "end": target_date,
+                                    "Range": r
+                                }
+                                res_num = scraper.post("https://www.ivasms.com/portal/sms/received/getsms/number", headers=headers, data=payload_num, timeout=15)
                                 
-                                total_active_nums += len(numbers)
-                                
-                                if not numbers:
-                                    continue
-                                
-                                print(f"🔍 Checking Range: {r} -> Found {len(numbers)} Active Numbers")
-                                
-                                # ⚠️ ধাপ ৩: Number থেকে SMS Table (HTML) আনবে
-                                for num in numbers:
-                                    payload_sms = payload_num.copy()
-                                    payload_sms["Number"] = num
-                                    res_sms = scraper.post("https://www.ivasms.com/portal/sms/received/getsms/number/sms", headers=headers, data=payload_sms, timeout=15)
+                                if res_num.status_code == 200:
+                                    raw_nums = re.findall(r"toggle[A-Za-z0-9_]*\(['\"]([^'\"]+)['\"]", res_num.text)
+                                    numbers = list(set([n for n in raw_nums if n.isdigit() and len(n) >= 8]))
                                     
-                                    if res_sms.status_code == 200:
-                                        # 🧠 HTML পার্স করে ওটিপি বের করা
-                                        soup = BeautifulSoup(res_sms.text, 'html.parser')
-                                        rows = soup.find_all('tr')
+                                    total_active_nums += len(numbers)
+                                    
+                                    if not numbers:
+                                        continue
+                                    
+                                    print(f"🔍 Checking Range [{target_date}]: {r} -> Found {len(numbers)} Active Numbers")
+                                    
+                                    # ⚠️ ধাপ ৩: Number থেকে SMS Table (HTML) আনবে (আপনার স্ক্রিনশট অনুযায়ী Payload)
+                                    for num in numbers:
+                                        payload_sms = payload_num.copy()
+                                        payload_sms["Number"] = num
+                                        res_sms = scraper.post("https://www.ivasms.com/portal/sms/received/getsms/number/sms", headers=headers, data=payload_sms, timeout=15)
                                         
-                                        for row in reversed(rows):
-                                            cols = row.find_all('td')
-                                            if len(cols) >= 2:
-                                                service_raw = safe_text(cols[0].get_text(strip=True)).upper()
-                                                if service_raw == "SENDER" or not service_raw: continue
-                                                
-                                                msg_cell = cols[1].find('div', class_='msg-text')
-                                                if msg_cell:
-                                                    full_text = safe_text(msg_cell.get_text(separator=" ", strip=True))
-                                                else:
-                                                    full_text = safe_text(cols[1].get_text(separator=" ", strip=True))
-                                                
-                                                msg_signature = f"{num}_{service_raw}_{full_text}"
-                                                
-                                                if msg_signature not in seen_signatures:
-                                                    if len(seen_signatures) > 1000:
-                                                        seen_signatures.clear()
+                                        if res_sms.status_code == 200:
+                                            soup = BeautifulSoup(res_sms.text, 'html.parser')
+                                            rows = soup.find_all('tr')
+                                            
+                                            for row in reversed(rows):
+                                                cols = row.find_all('td')
+                                                if len(cols) >= 2:
+                                                    service_raw = safe_text(cols[0].get_text(strip=True)).upper()
+                                                    if service_raw == "SENDER" or not service_raw: continue
+                                                    
+                                                    msg_cell = cols[1].find('div', class_='msg-text')
+                                                    if msg_cell:
+                                                        full_text = safe_text(msg_cell.get_text(separator=" ", strip=True))
+                                                    else:
+                                                        full_text = safe_text(cols[1].get_text(separator=" ", strip=True))
+                                                    
+                                                    msg_signature = f"{num}_{service_raw}_{full_text}"
+                                                    
+                                                    if msg_signature not in seen_signatures:
+                                                        if len(seen_signatures) > 1000:
+                                                            seen_signatures.clear()
+                                                            
+                                                        seen_signatures.add(msg_signature)
                                                         
-                                                    seen_signatures.add(msg_signature)
-                                                    
-                                                    # প্রথমবার রান হলে শুধু সেভ করে রাখবে
-                                                    if is_first_run:
-                                                        continue
-                                                    
-                                                    country_info, exact_range = get_country_and_exact_range(num, r)
-                                                    otp_code = extract_otp(full_text)
-                                                    service_title = service_raw.title()
-                                                    
-                                                    country_parts = country_info.split(' ')
-                                                    country_name = country_parts[0]
-                                                    flag = country_parts[1] if len(country_parts) > 1 else "🌐"
-
-                                                    # 🌟 RS OTP BOT STYLE DESIGN
-                                                    msg_body = (
-                                                        f"{flag} {country_name} {service_title} Otp Code Received Successfully 🎉\n\n"
-                                                        f"🔐 <b>Your OTP:</b> <code>{otp_code}</code>\n\n"
-                                                        f"☎️ <b>Number:</b> <code>{exact_range}</code>\n"
-                                                        f"⚙️ <b>Service:</b> {service_title}\n"
-                                                        f"🌍 <b>Country:</b> {country_info}\n\n"
-                                                        f"📩 <b>Full-Message:</b>\n"
-                                                        f"<code>{full_text}</code>"
-                                                    )
-                                                    
-                                                    markup = telebot.types.InlineKeyboardMarkup(row_width=2)
-                                                    markup.add(
-                                                        telebot.types.InlineKeyboardButton("🚀 Panel", url="https://t.me/"),
-                                                        telebot.types.InlineKeyboardButton("🛒 Buy IP", url="https://t.me/")
-                                                    )
-                                                    
-                                                    try:
-                                                        # ⚠️ Mute Mode ON
-                                                        bot.send_message(GROUP_ID, msg_body, parse_mode="HTML", reply_markup=markup, disable_notification=True)
-                                                        print(f"✅ PAID OTP Sent >> {service_title} | Number: {exact_range}")
-                                                    except Exception as e:
-                                                        print(f"❌ Telegram Error: {e}")
+                                                        if is_first_run:
+                                                            continue
                                                         
-                                    time.sleep(0.5) 
-                                    
-                        if is_first_run:
-                            print("✅ Pre-loaded old OTPs successfully! Now waiting for new ones...")
-                            is_first_run = False
-                            
-                        # 📡 লাইভ হার্টবিট 
-                        loop_heartbeat += 1
-                        if loop_heartbeat % 3 == 0:
-                            print(f"📡 Heartbeat: Scanned {len(ranges)} Ranges, Found {total_active_nums} Numbers. Waiting for new OTPs...")
+                                                        country_info, exact_range = get_country_and_exact_range(num, r)
+                                                        otp_code = extract_otp(full_text)
+                                                        service_title = service_raw.title()
+                                                        
+                                                        country_parts = country_info.split(' ')
+                                                        country_name = country_parts[0]
+                                                        flag = country_parts[1] if len(country_parts) > 1 else "🌐"
 
-                        error_count = 0 
-                        
+                                                        msg_body = (
+                                                            f"{flag} {country_name} {service_title} Otp Code Received Successfully 🎉\n\n"
+                                                            f"🔐 <b>Your OTP:</b> <code>{otp_code}</code>\n\n"
+                                                            f"☎️ <b>Number:</b> <code>{exact_range}</code>\n"
+                                                            f"⚙️ <b>Service:</b> {service_title}\n"
+                                                            f"🌍 <b>Country:</b> {country_info}\n\n"
+                                                            f"📩 <b>Full-Message:</b>\n"
+                                                            f"<code>{full_text}</code>"
+                                                        )
+                                                        
+                                                        markup = telebot.types.InlineKeyboardMarkup(row_width=2)
+                                                        markup.add(
+                                                            telebot.types.InlineKeyboardButton("🚀 Panel", url="https://t.me/"),
+                                                            telebot.types.InlineKeyboardButton("🛒 Buy IP", url="https://t.me/")
+                                                        )
+                                                        
+                                                        try:
+                                                            bot.send_message(GROUP_ID, msg_body, parse_mode="HTML", reply_markup=markup, disable_notification=True)
+                                                            print(f"✅ PAID OTP Sent >> {service_title} | Number: {exact_range}")
+                                                        except Exception as e:
+                                                            print(f"❌ Telegram Error: {e}")
+                                                            
+                                        time.sleep(0.5) 
+                                        
                     elif res_ranges.status_code in [401, 403, 419]:
                         print(f"🚨 Session Expired (Code {res_ranges.status_code}). Restarting login...")
+                        error_count = 5 # Force break inner loop
                         break 
                     else:
                         error_count += 1
                         print(f"⚠️ API Error {res_ranges.status_code}. Retrying...")
                         
-                except Exception as e:
-                    print(f"⚠️ Script Execution Error: {e}")
-                    error_count += 1
+                if is_first_run:
+                    print("✅ Pre-loaded old OTPs successfully! Now waiting for new ones...")
+                    is_first_run = False
                     
+                if total_active_nums == 0:
+                    print("📭 Inbox is empty today. Waiting for OTPs...")
+                    
+                error_count = 0
                 time.sleep(8) 
                 
             print("🔄 Browser Session lost. Restarting the whole process...")
@@ -363,7 +395,7 @@ def monitor_ranges():
             time.sleep(10)
 
 if __name__ == "__main__":
-    print("🤖 Paid SMS Bot is turning on (Smart X-Ray Extractor + Time Machine!)...")
+    print("🤖 Paid SMS Bot is turning on (Ultimate 3-Step API Match!)...")
     threading.Thread(target=monitor_ranges, daemon=True).start()
     
     while True:
