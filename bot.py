@@ -44,9 +44,8 @@ COUNTRY_DICT = {
     "27": ("South Africa", "🇿🇦"), "30": ("Greece", "🇬🇷"), "31": ("Netherlands", "🇳🇱"), 
     "32": ("Belgium", "🇧🇪"), "33": ("France", "🇫🇷"), "34": ("Spain", "🇪🇸"), 
     "39": ("Italy", "🇮🇹"), "44": ("UK", "🇬🇧"), "49": ("Germany", "🇩🇪"), 
-    "51": ("Peru", "🇵🇪"), "52": ("Mexico", "🇲🇽"), "53": ("Cuba", "🇨🇺"), 
-    "54": ("Argentina", "🇦🇷"), "55": ("Brazil", "🇧🇷"), "56": ("Chile", "🇨🇱"), 
-    "57": ("Colombia", "🇨🇴"), "58": ("Venezuela", "🇻🇪"), "60": ("Malaysia", "🇲🇾"), 
+    "51": ("Peru", "🇵🇪"), "52": ("Mexico", "🇲🇽"), "54": ("Argentina", "🇦🇷"), 
+    "55": ("Brazil", "🇧🇷"), "57": ("Colombia", "🇨🇴"), "60": ("Malaysia", "🇲🇾"), 
     "61": ("Australia", "🇦🇺"), "62": ("Indonesia", "🇮🇩"), "63": ("Philippines", "🇵🇭"), 
     "64": ("New Zealand", "🇳🇿"), "65": ("Singapore", "🇸🇬"), "66": ("Thailand", "🇹🇭"), 
     "81": ("Japan", "🇯🇵"), "82": ("South Korea", "🇰🇷"), "84": ("Vietnam", "🇻🇳"), 
@@ -228,7 +227,7 @@ def get_fresh_cookies_and_tokens():
         return None, None, None
 
 # ==========================================
-# 📡 STEP 2: HUMAN-LIKE 3-STEP SCANNER
+# 📡 STEP 2: HUMAN-LIKE 3-STEP SCANNER (AI Powered)
 # ==========================================
 def monitor_ranges():
     global is_first_run, seen_signatures
@@ -242,7 +241,7 @@ def monitor_ranges():
                 time.sleep(30)
                 continue
                 
-            print("⚡ Starting Smart '3-Step' Scraper (Exact API Replication)...")
+            print("⚡ Starting Smart '3-Step' Scraper (Timezone & AI Regex Fix)...")
             scraper = cloudscraper.create_scraper()
             scraper.cookies.update(cookie_dict)
             
@@ -259,17 +258,17 @@ def monitor_ranges():
             error_count = 0
             
             while error_count < 5:
-                # ⚠️ Timezone Fix: গতকাল থেকে আগামীকাল পর্যন্ত স্ক্যান করবে
+                # ⚠️ Timezone Fix: গতকাল এবং আজকের ডেট একসাথে চেক করবে
                 date_list = [
                     time.strftime("%Y-%m-%d"), 
                     (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
                 ]
                 
                 total_active_nums = 0
+                session_expired = False
                 
                 try:
                     for target_date in date_list:
-                        # ⚠️ API 1 (Get Ranges) Payload: 'from' and 'to' (As per your screenshot)
                         payload_ranges = {
                             "_token": page_token,
                             "from": target_date,
@@ -280,11 +279,8 @@ def monitor_ranges():
                         
                         if res_ranges.status_code == 200:
                             ranges = re.findall(r"toggleRange\('([^']+)'", res_ranges.text)
-                            
-                            if not ranges:
-                                continue 
+                            if not ranges: continue 
 
-                            # ⚠️ API 2 (Get Number) Payload: 'start', 'end', 'Range' (As per your screenshot)
                             for r in ranges:
                                 payload_num = {
                                     "_token": page_token,
@@ -297,22 +293,18 @@ def monitor_ranges():
                                 if res_num.status_code == 200:
                                     raw_nums = re.findall(r"toggleSms\('([^']+)'", res_num.text)
                                     numbers = list(set([n for n in raw_nums if n.isdigit() and len(n) >= 8]))
-                                    
                                     total_active_nums += len(numbers)
                                     
-                                    if not numbers:
-                                        continue
+                                    if not numbers: continue
                                     
                                     print(f"🔍 Checking Range [{target_date}]: {r} -> Found {len(numbers)} Active Numbers")
                                     
-                                    # ⚠️ API 3 (Get SMS) Payload: 'start', 'end', 'Number', 'Range' (As per your screenshot)
                                     for num in numbers:
                                         payload_sms = payload_num.copy()
                                         payload_sms["Number"] = num
                                         res_sms = scraper.post("https://www.ivasms.com/portal/sms/received/getsms/number/sms", headers=headers, data=payload_sms, timeout=15)
                                         
                                         if res_sms.status_code == 200:
-                                            # 🧠 HTML পার্স করে ওটিপি বের করা হচ্ছে
                                             soup = BeautifulSoup(res_sms.text, 'html.parser')
                                             rows = soup.find_all('tr')
                                             
@@ -333,11 +325,9 @@ def monitor_ranges():
                                                     if msg_signature not in seen_signatures:
                                                         if len(seen_signatures) > 1000:
                                                             seen_signatures.clear()
-                                                            
                                                         seen_signatures.add(msg_signature)
                                                         
-                                                        if is_first_run:
-                                                            continue
+                                                        if is_first_run: continue
                                                         
                                                         country_info, exact_range = get_country_and_exact_range(num, r)
                                                         otp_code = extract_otp(full_text)
@@ -347,7 +337,6 @@ def monitor_ranges():
                                                         country_name = country_parts[0]
                                                         flag = country_parts[1] if len(country_parts) > 1 else "🌐"
 
-                                                        # 🌟 RS OTP BOT STYLE DESIGN
                                                         msg_body = (
                                                             f"{flag} {country_name} {service_title} Otp Code Received Successfully 🎉\n\n"
                                                             f"🔐 <b>Your OTP:</b> <code>{otp_code}</code>\n\n"
@@ -365,7 +354,6 @@ def monitor_ranges():
                                                         )
                                                         
                                                         try:
-                                                            # ⚠️ Mute Mode ON (disable_notification=True)
                                                             bot.send_message(GROUP_ID, msg_body, parse_mode="HTML", reply_markup=markup, disable_notification=True)
                                                             print(f"✅ PAID OTP Sent >> {service_title} | Number: {exact_range}")
                                                         except Exception as e:
@@ -373,24 +361,34 @@ def monitor_ranges():
                                                             
                                         time.sleep(0.5) 
                                         
-                    elif res_ranges.status_code in [401, 403, 419]:
-                        print(f"🚨 Session Expired (Code {res_ranges.status_code}). Restarting login...")
-                        error_count = 5 
-                        break 
-                    else:
-                        error_count += 1
-                        print(f"⚠️ API Error {res_ranges.status_code}. Retrying...")
+                        elif res_ranges.status_code in [401, 403, 419]:
+                            print(f"🚨 Session Expired (Code {res_ranges.status_code}). Restarting login...")
+                            session_expired = True
+                            break 
+                        else:
+                            print(f"⚠️ API Error {res_ranges.status_code}. Retrying...")
+                            error_count += 1
+                            break 
+                            
+                    if session_expired:
+                        error_count = 5
+                        break
                         
-                if is_first_run:
-                    print("✅ Pre-loaded old OTPs successfully! Now waiting for new ones...")
-                    is_first_run = False
+                    if is_first_run:
+                        print("✅ Pre-loaded old OTPs successfully! Now waiting for new ones...")
+                        is_first_run = False
+                        
+                    if total_active_nums == 0:
+                        print("📭 Inbox is empty today. Waiting for OTPs...")
+                        
+                    error_count = 0
+                    time.sleep(8) 
                     
-                if total_active_nums == 0:
-                    print("📭 Inbox is empty today. Waiting for OTPs...")
+                except Exception as e:
+                    print(f"⚠️ Script Execution Error: {e}")
+                    error_count += 1
+                    time.sleep(8)
                     
-                error_count = 0
-                time.sleep(8) 
-                
             print("🔄 Browser Session lost. Restarting the whole process...")
             
         except Exception as e:
@@ -398,7 +396,7 @@ def monitor_ranges():
             time.sleep(10)
 
 if __name__ == "__main__":
-    print("🤖 Paid SMS Bot is turning on (Ultimate 3-Step API Match!)...")
+    print("🤖 Paid SMS Bot is turning on (Syntax Fixed + Smart 3-Step Simulator!)...")
     threading.Thread(target=monitor_ranges, daemon=True).start()
     
     while True:
