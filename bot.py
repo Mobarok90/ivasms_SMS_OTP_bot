@@ -228,7 +228,7 @@ def get_fresh_cookies_and_tokens():
         return None, None, None
 
 # ==========================================
-# 📡 STEP 2: HUMAN-LIKE 3-STEP SCANNER (AI Powered)
+# 📡 STEP 2: HUMAN-LIKE 3-STEP SCANNER
 # ==========================================
 def monitor_ranges():
     global is_first_run, seen_signatures
@@ -251,6 +251,7 @@ def monitor_ranges():
                 "Accept": "text/html, */*; q=0.01",
                 "X-Requested-With": "XMLHttpRequest", 
                 "X-CSRF-TOKEN": page_token,
+                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
                 "Origin": "https://www.ivasms.com",
                 "Referer": "https://www.ivasms.com/portal/sms/received"
             }
@@ -258,33 +259,32 @@ def monitor_ranges():
             error_count = 0
             
             while error_count < 5:
-                # ⚠️ Timezone Fix: স্ক্যানিং যাতে মিস না হয় তাই গতকাল এবং আজকের ডেট একসাথে চেক করবে
+                # ⚠️ Timezone Fix: গতকাল থেকে আগামীকাল পর্যন্ত স্ক্যান করবে
                 date_list = [
-                    time.strftime("%Y-%m-%d"), # Today
-                    (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d") # Yesterday
+                    time.strftime("%Y-%m-%d"), 
+                    (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
                 ]
                 
                 total_active_nums = 0
                 
                 try:
                     for target_date in date_list:
-                        # ⚠️ API 1 Payload: আপনার স্ক্রিনশট অনুযায়ী 'from' এবং 'to' দেওয়া হলো
+                        # ⚠️ API 1 (Get Ranges) Payload: 'from' and 'to' (As per your screenshot)
                         payload_ranges = {
                             "_token": page_token,
                             "from": target_date,
                             "to": target_date
                         }
                         
-                        # ⚠️ ধাপ ১: Range আনবে
                         res_ranges = scraper.post("https://www.ivasms.com/portal/sms/received/getsms", headers=headers, data=payload_ranges, timeout=20)
                         
                         if res_ranges.status_code == 200:
                             ranges = re.findall(r"toggleRange\('([^']+)'", res_ranges.text)
                             
                             if not ranges:
-                                continue # এই ডেটে না পেলে পরের ডেটে খুঁজবে
+                                continue 
 
-                            # ⚠️ ধাপ ২: Range থেকে Number আনবে (আপনার স্ক্রিনশট অনুযায়ী Payload)
+                            # ⚠️ API 2 (Get Number) Payload: 'start', 'end', 'Range' (As per your screenshot)
                             for r in ranges:
                                 payload_num = {
                                     "_token": page_token,
@@ -295,7 +295,7 @@ def monitor_ranges():
                                 res_num = scraper.post("https://www.ivasms.com/portal/sms/received/getsms/number", headers=headers, data=payload_num, timeout=15)
                                 
                                 if res_num.status_code == 200:
-                                    raw_nums = re.findall(r"toggle[A-Za-z0-9_]*\(['\"]([^'\"]+)['\"]", res_num.text)
+                                    raw_nums = re.findall(r"toggleSms\('([^']+)'", res_num.text)
                                     numbers = list(set([n for n in raw_nums if n.isdigit() and len(n) >= 8]))
                                     
                                     total_active_nums += len(numbers)
@@ -305,13 +305,14 @@ def monitor_ranges():
                                     
                                     print(f"🔍 Checking Range [{target_date}]: {r} -> Found {len(numbers)} Active Numbers")
                                     
-                                    # ⚠️ ধাপ ৩: Number থেকে SMS Table (HTML) আনবে (আপনার স্ক্রিনশট অনুযায়ী Payload)
+                                    # ⚠️ API 3 (Get SMS) Payload: 'start', 'end', 'Number', 'Range' (As per your screenshot)
                                     for num in numbers:
                                         payload_sms = payload_num.copy()
                                         payload_sms["Number"] = num
                                         res_sms = scraper.post("https://www.ivasms.com/portal/sms/received/getsms/number/sms", headers=headers, data=payload_sms, timeout=15)
                                         
                                         if res_sms.status_code == 200:
+                                            # 🧠 HTML পার্স করে ওটিপি বের করা হচ্ছে
                                             soup = BeautifulSoup(res_sms.text, 'html.parser')
                                             rows = soup.find_all('tr')
                                             
@@ -346,6 +347,7 @@ def monitor_ranges():
                                                         country_name = country_parts[0]
                                                         flag = country_parts[1] if len(country_parts) > 1 else "🌐"
 
+                                                        # 🌟 RS OTP BOT STYLE DESIGN
                                                         msg_body = (
                                                             f"{flag} {country_name} {service_title} Otp Code Received Successfully 🎉\n\n"
                                                             f"🔐 <b>Your OTP:</b> <code>{otp_code}</code>\n\n"
@@ -363,6 +365,7 @@ def monitor_ranges():
                                                         )
                                                         
                                                         try:
+                                                            # ⚠️ Mute Mode ON (disable_notification=True)
                                                             bot.send_message(GROUP_ID, msg_body, parse_mode="HTML", reply_markup=markup, disable_notification=True)
                                                             print(f"✅ PAID OTP Sent >> {service_title} | Number: {exact_range}")
                                                         except Exception as e:
@@ -372,7 +375,7 @@ def monitor_ranges():
                                         
                     elif res_ranges.status_code in [401, 403, 419]:
                         print(f"🚨 Session Expired (Code {res_ranges.status_code}). Restarting login...")
-                        error_count = 5 # Force break inner loop
+                        error_count = 5 
                         break 
                     else:
                         error_count += 1
