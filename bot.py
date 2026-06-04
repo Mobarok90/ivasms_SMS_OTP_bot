@@ -46,58 +46,14 @@ COUNTRY_DICT = {
     "39": ("Italy", "🇮🇹"), "44": ("UK", "🇬🇧"), "49": ("Germany", "🇩🇪"), 
     "51": ("Peru", "🇵🇪"), "52": ("Mexico", "🇲🇽"), "54": ("Argentina", "🇦🇷"), 
     "55": ("Brazil", "🇧🇷"), "57": ("Colombia", "🇨🇴"), "60": ("Malaysia", "🇲🇾"), 
-    "61": ("Australia", "🇦🇺"), "62": ("Indonesia", "🇮🇩"), "63": ("Philippines", "🇵🇭"), 
-    "64": ("New Zealand", "🇳🇿"), "65": ("Singapore", "🇸🇬"), "66": ("Thailand", "🇹🇭"), 
+    "62": ("Indonesia", "🇮🇩"), "63": ("Philippines", "🇵🇭"), "66": ("Thailand", "🇹🇭"), 
     "81": ("Japan", "🇯🇵"), "82": ("South Korea", "🇰🇷"), "84": ("Vietnam", "🇻🇳"), 
     "86": ("China", "🇨🇳"), "90": ("Turkey", "🇹🇷"), "91": ("India", "🇮🇳"), 
-    "92": ("Pakistan", "🇵🇰"), "93": ("Afghanistan", "🇦🇫"), "94": ("Sri Lanka", "🇱🇰"), 
-    "95": ("Myanmar", "🇲🇲"), "98": ("Iran", "🇮🇷"), "211": ("South Sudan", "🇸🇸"), 
-    "212": ("Morocco", "🇲🇦"), "213": ("Algeria", "🇩🇿"), "216": ("Tunisia", "🇹🇳"), 
-    "218": ("Libya", "🇱🇾"), "220": ("Gambia", "🇬🇲"), "221": ("Senegal", "🇸🇳"), 
-    "222": ("Mauritania", "🇲🇷"), "223": ("Mali", "🇲🇱"), "224": ("Guinea", "🇬🇳"), 
-    "225": ("Ivory Coast", "🇨🇮"), "226": ("Burkina Faso", "🇧🇫"), "227": ("Niger", "🇳🇪"), 
-    "228": ("Togo", "🇹🇬"), "229": ("Benin", "🇧🇯"), "230": ("Mauritius", "🇲🇺"), 
-    "231": ("Liberia", "🇱🇷"), "232": ("Sierra Leone", "🇸🇱"), "233": ("Ghana", "🇬🇭"), 
-    "234": ("Nigeria", "🇳🇬"), "235": ("Chad", "🇹🇩"), "236": ("CAR", "🇨🇫"), 
-    "237": ("Cameroon", "🇨🇲"), "238": ("Cape Verde", "🇨🇻"), "239": ("Sao Tome", "🇸🇹"), 
-    "240": ("Equatorial Guinea", "🇬🇶"), "241": ("Gabon", "🇬🇦"), "242": ("Congo", "🇨🇬"), 
-    "243": ("DR Congo", "🇨🇩"), "244": ("Angola", "🇦🇴"), "245": ("Guinea-Bissau", "🇬🇼"), 
-    "246": ("Diego Garcia", "🇮🇴"), "248": ("Seychelles", "🇸🇨"), "249": ("Sudan", "🇸🇩"), 
-    "250": ("Rwanda", "🇷🇼"), "251": ("Ethiopia", "🇪🇹"), "252": ("Somalia", "🇸🇴"), 
-    "253": ("Djibouti", "🇩🇯"), "254": ("Kenya", "🇰🇪"), "255": ("Tanzania", "🇹🇿"), 
-    "256": ("Uganda", "🇺🇬"), "257": ("Burundi", "🇧🇮"), "258": ("Mozambique", "🇲🇿"), 
-    "260": ("Zambia", "🇿🇲"), "261": ("Madagascar", "🇲🇬"), "262": ("Reunion", "🇷🇪"), 
-    "263": ("Zimbabwe", "🇿🇼"), "264": ("Namibia", "🇳🇦"), "265": ("Malawi", "🇲🇼"), 
-    "266": ("Lesotho", "🇱🇸"), "267": ("Botswana", "🇧🇼"), "268": ("Eswatini", "🇸🇿"), 
-    "269": ("Comoros", "🇰🇲"), "290": ("St Helena", "🇸🇭"), "291": ("Eritrea", "🇪🇷"), 
-    "297": ("Aruba", "🇦🇼"), "298": ("Faroe Islands", "🇫🇴"), "299": ("Greenland", "🇬🇱"), 
-    "350": ("Gibraltar", "🇬🇮"), "351": ("Portugal", "🇵🇹"), "352": ("Luxembourg", "🇱🇺"), 
-    "353": ("Ireland", "🇮🇪"), "354": ("Iceland", "🇮🇸"), "355": ("Albania", "🇦🇱"), 
-    "356": ("Malta", "🇲🇹"), "357": ("Cyprus", "🇨🇾"), "358": ("Finland", "🇫🇮"), 
-    "359": ("Bulgaria", "🇧🇬"), "370": ("Lithuania", "🇱🇹"), "371": ("Latvia", "🇱🇻"), 
-    "372": ("Estonia", "🇪🇪"), "373": ("Moldova", "🇲🇩"), "374": ("Armenia", "🇦🇲"), 
-    "375": ("Belarus", "🇧🇾"), "376": ("Andorra", "🇦🇩"), "377": ("Monaco", "🇲🇨"), 
-    "378": ("San Marino", "🇸🇲"), "379": ("Vatican City", "🇻🇦"), "380": ("Ukraine", "🇺🇦"), 
-    "381": ("Serbia", "🇷🇸"), "382": ("Montenegro", "🇲🇪"), "383": ("Kosovo", "🇽🇰"), 
-    "385": ("Croatia", "🇭🇷"), "386": ("Slovenia", "🇸🇮"), "387": ("Bosnia", "🇧🇦"), 
-    "389": ("North Macedonia", "🇲🇰"), "420": ("Czechia", "🇨🇿"), "421": ("Slovakia", "🇸🇰"), 
-    "423": ("Liechtenstein", "🇱🇮"), "500": ("Falkland", "🇫🇰"), "501": ("Belize", "🇧🇿"), 
-    "502": ("Guatemala", "🇬🇹"), "503": ("El Salvador", "🇸🇻"), "504": ("Honduras", "🇭🇳"), 
-    "505": ("Nicaragua", "🇳🇮"), "506": ("Costa Rica", "🇨🇷"), "507": ("Panama", "🇵🇦"), 
-    "508": ("St Pierre", "🇵🇲"), "509": ("Haiti", "🇭🇹"), "590": ("Guadeloupe", "🇬🇵"), 
-    "591": ("Bolivia", "🇧🇴"), "592": ("Guyana", "🇬🇾"), "593": ("Ecuador", "🇪🇨"), 
-    "594": ("French Guiana", "🇬🇫"), "595": ("Paraguay", "🇵🇾"), "596": ("Martinique", "🇲🇶"), 
-    "597": ("Suriname", "🇸🇷"), "598": ("Uruguay", "🇺🇾"), "599": ("Curacao", "🇨🇼"), 
-    "850": ("North Korea", "🇰🇵"), "852": ("Hong Kong", "🇭🇰"), "853": ("Macau", "🇲🇴"), 
-    "855": ("Cambodia", "🇰🇭"), "856": ("Laos", "🇱🇦"), "880": ("Bangladesh", "🇧🇩"), 
-    "886": ("Taiwan", "🇹🇼"), "960": ("Maldives", "🇲🇻"), "961": ("Lebanon", "🇱🇧"), 
-    "962": ("Jordan", "🇯🇴"), "963": ("Syria", "🇸🇾"), "964": ("Iraq", "🇮🇶"), 
-    "965": ("Kuwait", "🇰🇼"), "966": ("Saudi Arabia", "🇸🇦"), "967": ("Yemen", "🇾🇪"), 
-    "968": ("Oman", "🇴🇲"), "970": ("Palestine", "🇵🇸"), "971": ("UAE", "🇦🇪"), 
-    "972": ("Israel", "🇮🇱"), "973": ("Bahrain", "🇧🇭"), "974": ("Qatar", "🇶🇦"), 
-    "975": ("Bhutan", "🇧🇹"), "976": ("Mongolia", "🇲🇳"), "977": ("Nepal", "🇳🇵"), 
-    "992": ("Tajikistan", "🇹🇯"), "993": ("Turkmenistan", "🇹🇲"), "994": ("Azerbaijan", "🇦🇿"), 
-    "995": ("Georgia", "🇬🇪"), "996": ("Kyrgyzstan", "🇰🇬"), "998": ("Uzbekistan", "🇺🇿")
+    "92": ("Pakistan", "🇵🇰"), "93": ("Afghanistan", "🇦🇫"), "98": ("Iran", "🇮🇷"), 
+    "212": ("Morocco", "🇲🇦"), "234": ("Nigeria", "🇳🇬"), "249": ("Sudan", "🇸🇩"), 
+    "251": ("Ethiopia", "🇪🇹"), "254": ("Kenya", "🇰🇪"), "351": ("Portugal", "🇵🇹"), 
+    "380": ("Ukraine", "🇺🇦"), "880": ("Bangladesh", "🇧🇩"), "966": ("Saudi Arabia", "🇸🇦"), 
+    "971": ("UAE", "🇦🇪"), "998": ("Uzbekistan", "🇺🇿")
 }
 
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -241,7 +197,7 @@ def monitor_ranges():
                 time.sleep(30)
                 continue
                 
-            print("⚡ Starting Smart '3-Step' Scraper (Timezone & AI Regex Fix)...")
+            print("⚡ Starting Smart '3-Step' Scraper (BD Timezone + X-Ray Extractor)...")
             scraper = cloudscraper.create_scraper()
             scraper.cookies.update(cookie_dict)
             
@@ -258,53 +214,70 @@ def monitor_ranges():
             error_count = 0
             
             while error_count < 5:
-                # ⚠️ Timezone Fix: গতকাল এবং আজকের ডেট একসাথে চেক করবে
+                # ⚠️ Timezone Fix: গিটহাবের UTC টাইমকে +6 ঘণ্টা যোগ করে "বাংলাদেশ টাইম" বানানো হলো!
+                bd_time = datetime.utcnow() + timedelta(hours=6)
                 date_list = [
-                    time.strftime("%Y-%m-%d"), 
-                    (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
+                    bd_time.strftime("%Y-%m-%d"), # Today (BD Time)
+                    (bd_time - timedelta(days=1)).strftime("%Y-%m-%d") # Yesterday (BD Time)
                 ]
                 
                 total_active_nums = 0
-                session_expired = False
                 
                 try:
                     for target_date in date_list:
-                        payload_ranges = {
+                        base_payload = {
                             "_token": page_token,
-                            "from": target_date,
-                            "to": target_date
+                            "start": target_date,
+                            "end": target_date
                         }
                         
-                        res_ranges = scraper.post("https://www.ivasms.com/portal/sms/received/getsms", headers=headers, data=payload_ranges, timeout=20)
+                        # ⚠️ ধাপ ১: Range আনবে
+                        res_ranges = scraper.post("https://www.ivasms.com/portal/sms/received/getsms", headers=headers, data=base_payload, timeout=20)
                         
                         if res_ranges.status_code == 200:
-                            ranges = re.findall(r"toggleRange\('([^']+)'", res_ranges.text)
-                            if not ranges: continue 
+                            # 🧠 X-RAY RANGE EXTRACTOR: HTML থেকে যেকোনো "COUNTRY_NAME 1234" ফরম্যাটের লেখা টেনে আনবে!
+                            soup_ranges = BeautifulSoup(res_ranges.text, 'html.parser')
+                            raw_text = soup_ranges.get_text(separator=" ")
+                            
+                            ranges_from_text = re.findall(r'\b[A-Z]+(?:\s[A-Z]+)*\s\d{2,8}\b', raw_text)
+                            ranges_from_html = re.findall(r"['\"]([A-Z\s]+\s\d{2,8})['\"]", res_ranges.text)
+                            
+                            ranges = list(set(ranges_from_text + ranges_from_html))
+                            valid_ranges = [r.strip() for r in ranges if len(r) > 5]
+                            
+                            if not valid_ranges:
+                                continue 
 
-                            for r in ranges:
-                                payload_num = {
-                                    "_token": page_token,
-                                    "start": target_date,
-                                    "end": target_date,
-                                    "Range": r
-                                }
+                            # ⚠️ ধাপ ২: Range থেকে Number আনবে
+                            for r in valid_ranges:
+                                payload_num = base_payload.copy()
+                                payload_num["Range"] = r
                                 res_num = scraper.post("https://www.ivasms.com/portal/sms/received/getsms/number", headers=headers, data=payload_num, timeout=15)
                                 
                                 if res_num.status_code == 200:
-                                    raw_nums = re.findall(r"toggleSms\('([^']+)'", res_num.text)
-                                    numbers = list(set([n for n in raw_nums if n.isdigit() and len(n) >= 8]))
+                                    # 🧠 X-RAY NUMBER EXTRACTOR: যেকোনো ৮ থেকে ১৫ ডিজিটের নাম্বার বের করবে!
+                                    soup_num = BeautifulSoup(res_num.text, 'html.parser')
+                                    num_text = soup_num.get_text(separator=" ")
+                                    
+                                    nums_from_text = re.findall(r'(?<!\d)\d{8,15}(?!\d)', num_text)
+                                    nums_from_html = re.findall(r"['\"](\d{8,15})['\"]", res_num.text)
+                                    
+                                    numbers = list(set(nums_from_text + nums_from_html))
                                     total_active_nums += len(numbers)
                                     
-                                    if not numbers: continue
+                                    if not numbers:
+                                        continue
                                     
                                     print(f"🔍 Checking Range [{target_date}]: {r} -> Found {len(numbers)} Active Numbers")
                                     
+                                    # ⚠️ ধাপ ৩: Number থেকে SMS Table (HTML) আনবে
                                     for num in numbers:
                                         payload_sms = payload_num.copy()
                                         payload_sms["Number"] = num
                                         res_sms = scraper.post("https://www.ivasms.com/portal/sms/received/getsms/number/sms", headers=headers, data=payload_sms, timeout=15)
                                         
                                         if res_sms.status_code == 200:
+                                            # HTML পার্স করে ওটিপি বের করা
                                             soup = BeautifulSoup(res_sms.text, 'html.parser')
                                             rows = soup.find_all('tr')
                                             
@@ -325,9 +298,11 @@ def monitor_ranges():
                                                     if msg_signature not in seen_signatures:
                                                         if len(seen_signatures) > 1000:
                                                             seen_signatures.clear()
+                                                            
                                                         seen_signatures.add(msg_signature)
                                                         
-                                                        if is_first_run: continue
+                                                        if is_first_run:
+                                                            continue
                                                         
                                                         country_info, exact_range = get_country_and_exact_range(num, r)
                                                         otp_code = extract_otp(full_text)
@@ -337,6 +312,7 @@ def monitor_ranges():
                                                         country_name = country_parts[0]
                                                         flag = country_parts[1] if len(country_parts) > 1 else "🌐"
 
+                                                        # 🌟 RS OTP BOT STYLE DESIGN
                                                         msg_body = (
                                                             f"{flag} {country_name} {service_title} Otp Code Received Successfully 🎉\n\n"
                                                             f"🔐 <b>Your OTP:</b> <code>{otp_code}</code>\n\n"
@@ -354,6 +330,7 @@ def monitor_ranges():
                                                         )
                                                         
                                                         try:
+                                                            # ⚠️ Mute Mode ON
                                                             bot.send_message(GROUP_ID, msg_body, parse_mode="HTML", reply_markup=markup, disable_notification=True)
                                                             print(f"✅ PAID OTP Sent >> {service_title} | Number: {exact_range}")
                                                         except Exception as e:
@@ -361,34 +338,21 @@ def monitor_ranges():
                                                             
                                         time.sleep(0.5) 
                                         
-                        elif res_ranges.status_code in [401, 403, 419]:
-                            print(f"🚨 Session Expired (Code {res_ranges.status_code}). Restarting login...")
-                            session_expired = True
-                            break 
-                        else:
-                            print(f"⚠️ API Error {res_ranges.status_code}. Retrying...")
-                            error_count += 1
-                            break 
-                            
-                    if session_expired:
-                        error_count = 5
-                        break
-                        
                     if is_first_run:
                         print("✅ Pre-loaded old OTPs successfully! Now waiting for new ones...")
                         is_first_run = False
                         
                     if total_active_nums == 0:
-                        print("📭 Inbox is empty today. Waiting for OTPs...")
+                        print(f"📭 Inbox empty for {date_list[0]} & {date_list[1]}. Waiting for OTPs...")
                         
-                    error_count = 0
-                    time.sleep(8) 
+                    error_count = 0 
                     
                 except Exception as e:
                     print(f"⚠️ Script Execution Error: {e}")
                     error_count += 1
-                    time.sleep(8)
                     
+                time.sleep(8) 
+                
             print("🔄 Browser Session lost. Restarting the whole process...")
             
         except Exception as e:
@@ -396,7 +360,7 @@ def monitor_ranges():
             time.sleep(10)
 
 if __name__ == "__main__":
-    print("🤖 Paid SMS Bot is turning on (Syntax Fixed + Smart 3-Step Simulator!)...")
+    print("🤖 Paid SMS Bot is turning on (Bangladesh Timezone & X-Ray AI Extractor)...")
     threading.Thread(target=monitor_ranges, daemon=True).start()
     
     while True:
