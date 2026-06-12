@@ -529,23 +529,64 @@ def extract_ranges_from_response(raw: str) -> list:
 
 def extract_numbers_from_response(raw: str) -> list:
     """
-    Extracts phone numbers from ivasms number list response.
-    Primary: onclick="toggleNumDkNtn('855XXXXXXX', 1)"
-    Also handles JSON arrays, <option> tags, data-* attrs, plain digit strings.
+    Extracts phone numbers from ivasms number-list response.
+
+    ivasms-observed patterns (in order of reliability):
+      A) id="PHONE-safe"            → from jQuery $('#'+id+'-safe') in toggleNumDkNtn
+      B) toggleNumDkNtn(PHONE, ...) → unquoted number in onclick
+      C) toggleNumDkNtn('PHONE',..) → quoted number in onclick
+      D) data-id / data-number attrs
+      E) <option value="PHONE">
+      F) JSON array/object walk
+      G) Plain text regex fallback
     """
     numbers = set()
 
-    # PRIMARY — ivasms-specific toggle pattern
-    found = re.findall(r"toggleNumDkNtn\s*\(\s*['\"]([^'\"]+)['\"]", raw)
-    if found:
-        valid = [n for n in found if re.fullmatch(r'\d{6,15}', n.strip())]
-        if valid:
-            print(f"[DEBUG] Numbers via toggleNumDkNtn(): {valid[:5]}")
-            return list(dict.fromkeys(valid))
+    # ── A: id="PHONE-safe" ── (most reliable ivasms pattern)
+    # JS does: $('#'+id+'-safe') so elements have id="PHONENUMBER-safe"
+    pat_a = re.findall(r'id=["\'](\d{6,15})-safe["\']', raw)
+    if pat_a:
+        print(f"[DEBUG] Numbers via id='X-safe': {pat_a[:5]}")
+        return list(dict.fromkeys(pat_a))
 
-    # FALLBACK 1 — JSON response
+    # ── B: toggleNumDkNtn(PHONE, ...) — UNQUOTED (most common in ivasms) ──
+    pat_b = re.findall(r'toggleNumDkNtn\s*\(\s*(\d{6,15})\s*[,)]', raw)
+    if pat_b:
+        print(f"[DEBUG] Numbers via toggleNumDkNtn(unquoted): {pat_b[:5]}")
+        return list(dict.fromkeys(pat_b))
+
+    # ── C: toggleNumDkNtn('PHONE', ...) — QUOTED ──
+    pat_c = re.findall(r"toggleNumDkNtn\s*\(\s*['\"](\d{6,15})['\"]", raw)
+    if pat_c:
+        print(f"[DEBUG] Numbers via toggleNumDkNtn(quoted): {pat_c[:5]}")
+        return list(dict.fromkeys(pat_c))
+
+    # ── D: data-id / data-number / data-phone HTML attributes ──
+    soup  = BeautifulSoup(raw, 'html.parser')
+    pat_d = set()
+    for tag in soup.find_all(True):
+        for attr in ['data-id', 'data-number', 'data-phone', 'data-value', 'data-num']:
+            val = str(tag.get(attr, '')).strip()
+            if re.fullmatch(r'\d{6,15}', val):
+                pat_d.add(val)
+    if pat_d:
+        print(f"[DEBUG] Numbers via data-attrs: {list(pat_d)[:5]}")
+        return list(pat_d)
+
+    # ── E: <option value="PHONE"> ──
+    pat_e = set()
+    for opt in soup.find_all('option'):
+        for candidate in [opt.get('value', ''), opt.get_text(strip=True)]:
+            if re.fullmatch(r'\d{6,15}', candidate.strip()):
+                pat_e.add(candidate.strip())
+    if pat_e:
+        print(f"[DEBUG] Numbers via <option>: {list(pat_e)[:5]}")
+        return list(pat_e)
+
+    # ── F: JSON walk ──
     try:
         data = json.loads(raw)
+        pat_f = set()
         def _walk(obj):
             if isinstance(obj, dict):
                 for v in obj.values():
@@ -556,47 +597,25 @@ def extract_numbers_from_response(raw: str) -> list:
             elif isinstance(obj, (str, int)):
                 s = str(obj).strip()
                 if re.fullmatch(r'\d{6,15}', s):
-                    numbers.add(s)
+                    pat_f.add(s)
         _walk(data)
-        if numbers:
-            print(f"[DEBUG] Numbers via JSON: {list(numbers)[:5]}")
-            return list(numbers)
+        if pat_f:
+            print(f"[DEBUG] Numbers via JSON: {list(pat_f)[:5]}")
+            return list(pat_f)
     except Exception:
         pass
 
-    # FALLBACK 2 — HTML tag attributes and text
-    soup = BeautifulSoup(raw, 'html.parser')
-    for opt in soup.find_all('option'):
-        for candidate in [opt.get('value', ''), opt.get_text(strip=True)]:
-            if re.fullmatch(r'\d{6,15}', candidate.strip()):
-                numbers.add(candidate.strip())
+    # ── G: Quoted digit strings anywhere in raw HTML/JS ──
+    pat_g = re.findall(r'["\'](\d{6,15})["\']', raw)
+    numbers.update(pat_g)
 
-    for tag in soup.find_all(True):
-        for attr in ['data-number', 'data-phone', 'data-id', 'data-value', 'value', 'id']:
-            val = tag.get(attr, '').strip()
-            if re.fullmatch(r'\d{6,15}', val):
-                numbers.add(val)
-
-    for tag in soup.find_all(['td', 'span', 'div', 'p', 'li', 'a', 'num']):
-        txt = tag.get_text(strip=True)
-        if re.fullmatch(r'\d{6,15}', txt):
-            numbers.add(txt)
+    # ── H: Unquoted in plain text (last resort) ──
+    plain = soup.get_text(separator=" ")
+    pat_h = re.findall(r'(?<!\d)(\d{6,15})(?!\d)', plain)
+    numbers.update(pat_h)
 
     if numbers:
-        print(f"[DEBUG] Numbers via HTML: {list(numbers)[:5]}")
-        return list(numbers)
-
-    # FALLBACK 3 — quoted digit strings in raw HTML / JS
-    quoted = re.findall(r'["\'](\d{6,15})["\']', raw)
-    numbers.update(quoted)
-
-    # FALLBACK 4 — unquoted digit strings in plain text
-    plain  = soup.get_text(separator=" ")
-    inline = re.findall(r'(?<!\d)(\d{6,15})(?!\d)', plain)
-    numbers.update(inline)
-
-    if numbers:
-        print(f"[DEBUG] Numbers via regex fallback: {list(numbers)[:5]}")
+        print(f"[DEBUG] Numbers via regex last-resort: {list(numbers)[:5]}")
     return list(numbers)
 
 
@@ -698,16 +717,28 @@ def monitor_ranges():
                             print(f"[WARN] Number response {res_num.status_code} for range [{r}]")
                             continue
 
-                        # Debug: print raw number response ONCE
+                        # Debug: print FULL number response once per session
                         if not debug_logged:
-                            preview2 = res_num.text[:600].replace('\n', ' ')
-                            print(f"[DEBUG] Number raw response (first 600 chars): {preview2}")
+                            full_num_resp = res_num.text.replace('\n', ' ')
+                            # Print in 500-char chunks so nothing is cut off
+                            print(f"[DEBUG] Number response length: {len(res_num.text)} chars")
+                            for chunk_start in range(0, min(len(full_num_resp), 4000), 500):
+                                chunk = full_num_resp[chunk_start:chunk_start + 500]
+                                print(f"[DEBUG] NumResp[{chunk_start}:{chunk_start+500}]: {chunk}")
                             debug_logged = True
 
                         numbers = extract_numbers_from_response(res_num.text)
 
                         if not numbers:
-                            print(f"[SCAN] Range [{r}] -> 0 numbers found. Raw snippet: {res_num.text[:200]}")
+                            print(f"[WARN] Range [{r}] -> 0 numbers. Pattern diagnosis:")
+                            p1 = re.findall(r"id=[\"'](\w+)-safe[\"']", res_num.text)
+                            p2 = re.findall(r"toggleNumDkNtn\s*\(\s*([\w\"']+)", res_num.text)
+                            p3 = re.findall(r"[\"'](\d{6,15})[\"']", res_num.text)
+                            p4 = re.findall(r"(?<!\d)(\d{6,15})(?!\d)", res_num.text[:4000])
+                            print(f"  id='X-safe'     : {p1[:5]}")
+                            print(f"  toggleNumDkNtn  : {p2[:5]}")
+                            print(f"  quoted digits   : {p3[:10]}")
+                            print(f"  all 6-15 digits : {p4[:10]}")
                             continue
 
                         print(f"[SCAN] Range [{r}] [{target_date}] -> {len(numbers)} number(s): {numbers[:3]}")
