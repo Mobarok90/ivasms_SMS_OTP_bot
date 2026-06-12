@@ -479,48 +479,56 @@ def get_fresh_cookies_and_tokens():
 #              onclick="toggleNumDkNtn('PHONE', safe)"
 # ==========================================
 
-def extract_ranges_from_response(raw: str) -> list:
+def extract_ranges_from_response(raw: str):
     """
-    Extracts range names from ivasms range response.
-    Primary: onclick="toggleRange('CAMBODIA 3572','CAMBODIA_3572')"
-    Returns the FIRST argument (used as Range: param in number fetch).
-    """
-    # PRIMARY — ivasms-specific toggle pattern (most reliable)
-    ranges = re.findall(r"toggleRange\s*\(\s*['\"]([^'\"]+)['\"]", raw)
-    if ranges:
-        unique = list(dict.fromkeys(ranges))  # preserve order, dedupe
-        print(f"[DEBUG] Ranges via toggleRange(): {unique[:5]}")
-        return unique
+    Extracts range identifiers from ivasms getsms response.
 
-    # FALLBACK 1 — <option> tags
+    ivasms HTML: onclick="toggleRange('CAMBODIA 3572','CAMBODIA_3572')"
+      arg1 = display name  ('CAMBODIA 3572')  — used for country detection
+      arg2 = CSS/API id    ('CAMBODIA_3572')  — used for getsms/number API call
+
+    Returns list of (display_name, api_id) tuples.
+    Falls back to [(val, val)] for non-toggleRange patterns.
+    """
+    # PRIMARY — extract BOTH args from toggleRange (most reliable)
+    pairs = re.findall(
+        r"toggleRange\s*\(\s*['\"]([^'\"]+)['\"].*?['\"]([^'\"]+)['\"]",
+        raw
+    )
+    if pairs:
+        unique = list(dict.fromkeys(pairs))
+        print(f"[DEBUG] Ranges via toggleRange(name, id): {unique[:3]}")
+        return unique   # [(display_name, api_id), ...]
+
+    # FALLBACK — <option> tags
     soup = BeautifulSoup(raw, 'html.parser')
     opt_ranges = []
     for opt in soup.find_all('option'):
         val = opt.get('value', '').strip()
         if val and val.lower() not in ('', '--', 'all', 'select'):
-            opt_ranges.append(val)
+            opt_ranges.append((val, val))
     if opt_ranges:
-        print(f"[DEBUG] Ranges via <option>: {opt_ranges[:5]}")
+        print(f"[DEBUG] Ranges via <option>: {opt_ranges[:3]}")
         return list(dict.fromkeys(opt_ranges))
 
-    # FALLBACK 2 — data-range / data-value attributes
+    # FALLBACK — data attributes
     attr_ranges = []
     for tag in soup.find_all(True):
         for attr in ['data-range', 'data-id', 'data-value']:
             val = tag.get(attr, '').strip()
             if val and len(val) > 2:
-                attr_ranges.append(val)
+                attr_ranges.append((val, val))
     if attr_ranges:
-        print(f"[DEBUG] Ranges via data-attr: {attr_ranges[:5]}")
+        print(f"[DEBUG] Ranges via data-attr: {attr_ranges[:3]}")
         return list(dict.fromkeys(attr_ranges))
 
-    # FALLBACK 3 — text regex (COUNTRY NAME + digits)
+    # FALLBACK — text/html regex
     plain      = soup.get_text(separator=" ")
     text_found = re.findall(r'\b([A-Z]{2,}(?:\s+[A-Z]+)*\s+\d{1,8})\b', plain)
     html_found = re.findall(r"['\"]([A-Z]{2,}(?:\s[A-Z]+)*\s\d{1,8})['\"]", raw)
-    all_found  = list(dict.fromkeys(text_found + html_found))
+    all_found  = [(v, v) for v in dict.fromkeys(text_found + html_found)]
     if all_found:
-        print(f"[DEBUG] Ranges via regex: {all_found[:5]}")
+        print(f"[DEBUG] Ranges via regex: {all_found[:3]}")
         return all_found
 
     print("[DEBUG] No ranges found in response.")
@@ -701,51 +709,102 @@ def monitor_ranges():
                     print(f"[SCAN] {len(valid_ranges)} range(s) found for {target_date}: {valid_ranges[:3]}")
 
                     # ── STEP 2: Fetch numbers per range ──────────────────
-                    for r in valid_ranges:
-                        payload_num = {**base_payload, "Range": r}
+                    # valid_ranges is list of (display_name, api_id) tuples
+                    for range_tuple in valid_ranges:
+                        if isinstance(range_tuple, tuple):
+                            display_name, api_id = range_tuple
+                        else:
+                            display_name = api_id = range_tuple
 
-                        try:
-                            res_num = scraper.post(
-                                "https://www.ivasms.com/portal/sms/received/getsms/number",
-                                headers=headers, data=payload_num, timeout=20
-                            )
-                        except Exception as e:
-                            print(f"[WARN] Number fetch failed [{r}]: {e}")
+                        print(f"[SCAN] Fetching numbers: display='{display_name}' api_id='{api_id}'")
+
+                        def _do_get_numbers(range_param):
+                            """POST to getsms/number with given Range param. Returns raw text or None."""
+                            try:
+                                resp = scraper.post(
+                                    "https://www.ivasms.com/portal/sms/received/getsms/number",
+                                    headers=headers,
+                                    data={**base_payload, "Range": range_param},
+                                    timeout=20
+                                )
+                                return resp.text if resp.status_code == 200 else None
+                            except Exception as ex:
+                                print(f"[WARN] Number fetch [{range_param}]: {ex}")
+                                return None
+
+                        # ── Try 1: CSS/underscore ID (e.g. 'CAMBODIA_3572') ──
+                        num_raw = _do_get_numbers(api_id)
+
+                        # detected numeric range ID from the embedded JS (e.g. Range: '1000')
+                        found_numeric_id = None
+
+                        # ── If response is script-only (< 1500 chars, no long digit strings),
+                        #    extract the embedded numeric Range ID and retry ──
+                        if num_raw and len(num_raw.strip()) < 1500:
+                            if not re.search(r'\d{7,15}', num_raw):
+                                numeric_ids = re.findall(r"Range\s*:\s*['\"]?(\d+)['\"]?", num_raw)
+                                if numeric_ids:
+                                    found_numeric_id = numeric_ids[0]
+                                    print(f"[DEBUG] Script-only — retrying with numeric Range ID: {found_numeric_id}")
+                                    num_raw2 = _do_get_numbers(found_numeric_id)
+                                    if num_raw2:
+                                        num_raw = num_raw2
+
+                        # ── Try 2: display name with space (e.g. 'CAMBODIA 3572') ──
+                        if num_raw and len(num_raw.strip()) < 1500 and not re.search(r'\d{7,15}', num_raw):
+                            if api_id != display_name:
+                                print(f"[DEBUG] Still script-only — retrying with display name: '{display_name}'")
+                                alt = _do_get_numbers(display_name)
+                                if alt:
+                                    num_raw = alt
+
+                        if not num_raw:
                             continue
 
-                        if res_num.status_code != 200:
-                            print(f"[WARN] Number response {res_num.status_code} for range [{r}]")
-                            continue
+                        # The Range ID to use for SMS fetch (prefer numeric ID if found)
+                        sms_range_id = found_numeric_id if found_numeric_id else api_id
 
                         # Debug: print FULL number response once per session
                         if not debug_logged:
-                            full_num_resp = res_num.text.replace('\n', ' ')
-                            # Print in 500-char chunks so nothing is cut off
-                            print(f"[DEBUG] Number response length: {len(res_num.text)} chars")
-                            for chunk_start in range(0, min(len(full_num_resp), 4000), 500):
-                                chunk = full_num_resp[chunk_start:chunk_start + 500]
-                                print(f"[DEBUG] NumResp[{chunk_start}:{chunk_start+500}]: {chunk}")
+                            clean = num_raw.replace('\n', ' ')
+                            print(f"[DEBUG] Number response length: {len(num_raw)} chars")
+                            for ci in range(0, min(len(clean), 4000), 500):
+                                print(f"[DEBUG] NumResp[{ci}:{ci+500}]: {clean[ci:ci+500]}")
                             debug_logged = True
 
-                        numbers = extract_numbers_from_response(res_num.text)
+                        numbers = extract_numbers_from_response(num_raw)
 
                         if not numbers:
-                            print(f"[WARN] Range [{r}] -> 0 numbers. Pattern diagnosis:")
-                            p1 = re.findall(r"id=[\"'](\w+)-safe[\"']", res_num.text)
-                            p2 = re.findall(r"toggleNumDkNtn\s*\(\s*([\w\"']+)", res_num.text)
-                            p3 = re.findall(r"[\"'](\d{6,15})[\"']", res_num.text)
-                            p4 = re.findall(r"(?<!\d)(\d{6,15})(?!\d)", res_num.text[:4000])
-                            print(f"  id='X-safe'     : {p1[:5]}")
-                            print(f"  toggleNumDkNtn  : {p2[:5]}")
-                            print(f"  quoted digits   : {p3[:10]}")
-                            print(f"  all 6-15 digits : {p4[:10]}")
+                            # Last-resort: try display_name if api_id failed
+                            if api_id != display_name:
+                                print(f"[DEBUG] Retrying with display name: '{display_name}'")
+                                alt_raw = fetch_numbers_for_range(display_name)
+                                if alt_raw:
+                                    numbers = extract_numbers_from_response(alt_raw)
+
+                        if not numbers:
+                            p1 = re.findall(r"id=[\"'](\w+)-safe[\"']", num_raw)
+                            p2 = re.findall(r"toggleNumDkNtn\s*\(\s*([\w\"']+)", num_raw)
+                            p3 = re.findall(r"[\"'](\d{6,15})[\"']", num_raw)
+                            p4 = re.findall(r"(?<!\d)(\d{6,15})(?!\d)", num_raw[:4000])
+                            print(f"[WARN] Still 0 numbers for [{api_id}]. Diagnosis:")
+                            print(f"  id='X-safe'   : {p1[:5]}")
+                            print(f"  toggleNum()   : {p2[:5]}")
+                            print(f"  quoted digits : {p3[:8]}")
+                            print(f"  all 6-15 dig  : {p4[:8]}")
                             continue
 
-                        print(f"[SCAN] Range [{r}] [{target_date}] -> {len(numbers)} number(s): {numbers[:3]}")
+                        print(f"[SCAN] Range [{api_id}] [{target_date}] -> {len(numbers)} number(s): {numbers[:3]}")
 
                         # ── STEP 3: Fetch SMS per number ─────────────────
+                        # sms_range_id was set above (found_numeric_id or api_id)
+
                         for num in numbers:
-                            payload_sms = {**payload_num, "Number": num}
+                            payload_sms = {
+                                **base_payload,
+                                "Range":  sms_range_id,
+                                "Number": num,
+                            }
 
                             try:
                                 res_sms = scraper.post(
@@ -757,16 +816,15 @@ def monitor_ranges():
                                 continue
 
                             if res_sms.status_code != 200:
+                                print(f"[WARN] SMS response {res_sms.status_code} for {num}")
                                 continue
 
-                            # Debug SMS raw response
                             sms_preview = res_sms.text[:400].replace('\n', ' ')
-                            print(f"[DEBUG] SMS response for {num}: {sms_preview}")
+                            print(f"[DEBUG] SMS({num}): {sms_preview}")
 
                             sms_list = parse_sms_html(res_sms.text)
-
                             if not sms_list:
-                                print(f"[WARN] No SMS parsed for number {num}. Raw: {res_sms.text[:200]}")
+                                print(f"[WARN] No SMS parsed for {num}. Raw: {res_sms.text[:300]}")
 
                             for service_raw, full_text in sms_list:
                                 if not full_text or len(full_text) < 5:
@@ -774,7 +832,7 @@ def monitor_ranges():
                                 sig = f"{num}|{service_raw}|{full_text[:120]}"
                                 if is_seen(sig):
                                     continue
-                                send_otp_to_telegram(num, service_raw, full_text, r)
+                                send_otp_to_telegram(num, service_raw, full_text, display_name)
                                 total_sent += 1
                                 time.sleep(0.3)
 
