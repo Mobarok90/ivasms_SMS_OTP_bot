@@ -426,9 +426,146 @@ def get_fresh_cookies_and_tokens():
     return None, None, None
 
 # ==========================================
+# UNIVERSAL RESPONSE PARSER (JSON + HTML + plain-text)
+# ==========================================
+def extract_numbers_from_response(raw: str) -> list:
+    """
+    Extracts phone-number-like strings from ANY response format.
+    Tries JSON first, then HTML option/select/data-attrs, then regex on plain text.
+    """
+    numbers = set()
+
+    # --- Try JSON ---
+    try:
+        data = json.loads(raw)
+        # Flatten all values from JSON and look for digit strings
+        def walk(obj):
+            if isinstance(obj, dict):
+                for v in obj.values():
+                    walk(v)
+            elif isinstance(obj, list):
+                for item in obj:
+                    walk(item)
+            elif isinstance(obj, (str, int)):
+                s = str(obj).strip()
+                if re.fullmatch(r'\d{6,15}', s):
+                    numbers.add(s)
+        walk(data)
+        if numbers:
+            print(f"[DEBUG] Numbers from JSON: {list(numbers)[:5]}")
+            return list(numbers)
+    except Exception:
+        pass
+
+    # --- Try HTML ---
+    soup = BeautifulSoup(raw, 'html.parser')
+
+    # <option value="NUMBER"> or <option>NUMBER</option>
+    for opt in soup.find_all('option'):
+        val = opt.get('value', '').strip()
+        txt = opt.get_text(strip=True)
+        for candidate in [val, txt]:
+            if re.fullmatch(r'\d{6,15}', candidate):
+                numbers.add(candidate)
+
+    # data-number, data-value, data-id attributes
+    for tag in soup.find_all(True):
+        for attr in ['data-number', 'data-value', 'data-id', 'data-phone', 'value']:
+            val = tag.get(attr, '').strip()
+            if re.fullmatch(r'\d{6,15}', val):
+                numbers.add(val)
+
+    # <td> or <span> containing only digits
+    for tag in soup.find_all(['td', 'span', 'div', 'p', 'li', 'a']):
+        txt = tag.get_text(strip=True)
+        if re.fullmatch(r'\d{6,15}', txt):
+            numbers.add(txt)
+
+    if numbers:
+        print(f"[DEBUG] Numbers from HTML attrs/tags: {list(numbers)[:5]}")
+        return list(numbers)
+
+    # --- Regex fallback on raw text ---
+    plain = soup.get_text(separator=" ")
+    found = re.findall(r'(?<!\d)(\d{6,15})(?!\d)', plain)
+    # Also check raw HTML for quoted digit strings
+    found += re.findall(r'["\'](\d{6,15})["\']', raw)
+    numbers.update(found)
+
+    if numbers:
+        print(f"[DEBUG] Numbers from regex fallback: {list(numbers)[:5]}")
+    return list(numbers)
+
+
+def extract_ranges_from_response(raw: str) -> list:
+    """
+    Extracts range identifiers from the getsms response.
+    Handles JSON arrays, <option> tags, data-* attrs, and text patterns.
+    """
+    ranges = set()
+
+    # --- Try JSON ---
+    try:
+        data = json.loads(raw)
+        def walk(obj):
+            if isinstance(obj, dict):
+                for v in obj.values():
+                    walk(v)
+            elif isinstance(obj, list):
+                for item in obj:
+                    walk(item)
+            elif isinstance(obj, str):
+                s = obj.strip()
+                if s and len(s) > 1:
+                    ranges.add(s)
+        walk(data)
+        if ranges:
+            print(f"[DEBUG] Ranges from JSON: {list(ranges)[:5]}")
+            return [r for r in ranges if any(c.isdigit() for c in r) or len(r) > 2]
+    except Exception:
+        pass
+
+    soup = BeautifulSoup(raw, 'html.parser')
+
+    # <option value="RANGE">
+    for opt in soup.find_all('option'):
+        val = opt.get('value', '').strip()
+        txt = opt.get_text(strip=True)
+        for candidate in [val, txt]:
+            if candidate and candidate.lower() not in ('', 'select', 'all', '--'):
+                ranges.add(candidate)
+
+    # data-range, data-value attributes
+    for tag in soup.find_all(True):
+        for attr in ['data-range', 'data-value', 'value']:
+            val = tag.get(attr, '').strip()
+            if val and len(val) > 1 and val.lower() not in ('', 'on', 'off', 'true', 'false'):
+                ranges.add(val)
+
+    if ranges:
+        valid = [r for r in ranges if any(c.isdigit() for c in r)]
+        if valid:
+            print(f"[DEBUG] Ranges from HTML: {valid[:5]}")
+            return valid
+
+    # Text pattern fallback
+    plain = soup.get_text(separator=" ")
+    found_text = re.findall(r'\b[A-Z]{2,}(?:\s+[A-Z]+)*\s+\d{1,8}\b', plain)
+    found_html = re.findall(r'["\']([A-Z]{2,}(?:\s+[A-Z]+)*\s+\d{1,8})["\']', raw)
+    found_num  = re.findall(r'["\'](\d{1,8})["\']', raw)
+
+    all_found = list(set(found_text + found_html + found_num))
+    if all_found:
+        print(f"[DEBUG] Ranges from regex: {all_found[:5]}")
+    return all_found
+
+
+# ==========================================
 # STEP 2: MAIN OTP SCANNER (BD Timezone, 3-Step)
 # ==========================================
 def monitor_ranges():
+    debug_logged = False  # Print raw response once per session for diagnosis
+
     while True:
         cookie_dict, user_agent, page_token = get_fresh_cookies_and_tokens()
 
@@ -438,6 +575,7 @@ def monitor_ranges():
             continue
 
         print("[SCANNER] Session established. Starting OTP scan (Bangladesh timezone)...")
+        debug_logged = False
 
         scraper = cloudscraper.create_scraper()
         scraper.cookies.update(cookie_dict)
@@ -456,7 +594,6 @@ def monitor_ranges():
 
         while error_count < 5:
             try:
-                # Bangladesh dates (today + yesterday)
                 today_bd     = bd_now().strftime("%Y-%m-%d")
                 yesterday_bd = (bd_now() - timedelta(days=1)).strftime("%Y-%m-%d")
                 date_list    = [today_bd, yesterday_bd]
@@ -471,7 +608,7 @@ def monitor_ranges():
                         "end":    target_date,
                     }
 
-                    # STEP 1: Fetch range list
+                    # ── STEP 1: Fetch ranges ──────────────────────────────
                     try:
                         res_ranges = scraper.post(
                             "https://www.ivasms.com/portal/sms/received/getsms",
@@ -482,35 +619,29 @@ def monitor_ranges():
                         error_count += 1
                         break
 
-                    if res_ranges.status_code == 401:
-                        print("[WARN] Session expired (401). Re-logging in...")
-                        error_count = 999  # Force re-login
+                    if res_ranges.status_code in (401, 403):
+                        print(f"[WARN] Session expired ({res_ranges.status_code}). Re-logging in...")
+                        error_count = 999
                         break
-
                     if res_ranges.status_code != 200:
                         print(f"[WARN] Range response {res_ranges.status_code} [{target_date}]")
                         error_count += 1
                         break
 
-                    soup_ranges = BeautifulSoup(res_ranges.text, 'html.parser')
-                    raw_text    = soup_ranges.get_text(separator=" ")
+                    # Debug: print raw response ONCE so we know the format
+                    if not debug_logged:
+                        preview = res_ranges.text[:600].replace('\n', ' ')
+                        print(f"[DEBUG] Range raw response (first 600 chars): {preview}")
 
-                    ranges_text    = re.findall(r'\b[A-Z]{2,}(?:\s+[A-Z]+)*\s+\d{1,8}\b', raw_text)
-                    ranges_html    = re.findall(r"['\"]([A-Z]{2,}(?:\s+[A-Z]+)*\s+\d{1,8})['\"]", res_ranges.text)
-                    numeric_ranges = re.findall(r'value=["\'](\d{1,8})["\']', res_ranges.text)
-
-                    valid_ranges = list(set(ranges_text + ranges_html))
-                    valid_ranges = [r.strip() for r in valid_ranges if len(r) > 3 and any(c.isdigit() for c in r)]
-                    if not valid_ranges and numeric_ranges:
-                        valid_ranges = list(set(numeric_ranges))
+                    valid_ranges = extract_ranges_from_response(res_ranges.text)
 
                     if not valid_ranges:
                         print(f"[SCAN] No ranges found for {target_date}.")
                         continue
 
-                    print(f"[SCAN] {len(valid_ranges)} ranges found for {target_date}.")
+                    print(f"[SCAN] {len(valid_ranges)} range(s) found for {target_date}: {valid_ranges[:3]}")
 
-                    # STEP 2: Fetch numbers per range
+                    # ── STEP 2: Fetch numbers per range ──────────────────
                     for r in valid_ranges:
                         payload_num = {**base_payload, "Range": r}
 
@@ -524,20 +655,24 @@ def monitor_ranges():
                             continue
 
                         if res_num.status_code != 200:
+                            print(f"[WARN] Number response {res_num.status_code} for range [{r}]")
                             continue
 
-                        soup_num      = BeautifulSoup(res_num.text, 'html.parser')
-                        num_text      = soup_num.get_text(separator=" ")
-                        nums_text_re  = re.findall(r'(?<!\d)\d{8,15}(?!\d)', num_text)
-                        nums_html_re  = re.findall(r"['\"](\d{8,15})['\"]", res_num.text)
-                        numbers       = list(set(nums_text_re + nums_html_re))
+                        # Debug: print raw number response ONCE
+                        if not debug_logged:
+                            preview2 = res_num.text[:600].replace('\n', ' ')
+                            print(f"[DEBUG] Number raw response (first 600 chars): {preview2}")
+                            debug_logged = True
+
+                        numbers = extract_numbers_from_response(res_num.text)
 
                         if not numbers:
+                            print(f"[SCAN] Range [{r}] -> 0 numbers found. Raw snippet: {res_num.text[:200]}")
                             continue
 
-                        print(f"[SCAN] Range {r} [{target_date}] -> {len(numbers)} number(s)")
+                        print(f"[SCAN] Range [{r}] [{target_date}] -> {len(numbers)} number(s): {numbers[:3]}")
 
-                        # STEP 3: Fetch SMS per number
+                        # ── STEP 3: Fetch SMS per number ─────────────────
                         for num in numbers:
                             payload_sms = {**payload_num, "Number": num}
 
@@ -553,7 +688,14 @@ def monitor_ranges():
                             if res_sms.status_code != 200:
                                 continue
 
+                            # Debug SMS raw response
+                            sms_preview = res_sms.text[:400].replace('\n', ' ')
+                            print(f"[DEBUG] SMS response for {num}: {sms_preview}")
+
                             sms_list = parse_sms_html(res_sms.text)
+
+                            if not sms_list:
+                                print(f"[WARN] No SMS parsed for number {num}. Raw: {res_sms.text[:200]}")
 
                             for service_raw, full_text in sms_list:
                                 if not full_text or len(full_text) < 5:
@@ -568,9 +710,9 @@ def monitor_ranges():
                         time.sleep(0.8)
 
                 if total_sent == 0:
-                    print(f"[SCAN] No new OTPs found for {today_bd}. Next check in 8s...")
+                    print(f"[SCAN] No new OTPs for {today_bd}. Next check in 8s...")
                 else:
-                    print(f"[SCAN] Sent {total_sent} OTP(s) this cycle.")
+                    print(f"[SCAN] Cycle complete — sent {total_sent} OTP(s).")
 
                 error_count = 0
 
