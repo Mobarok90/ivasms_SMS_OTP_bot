@@ -181,39 +181,87 @@ def extract_otp(full_text: str) -> str:
 def parse_sms_html(html_response: str):
     """
     Parses ivasms SMS HTML response and returns list of (sender, message) tuples.
-    Supports multiple HTML structures.
+
+    ivasms SMS table structure (observed):
+      <table>
+        <thead><tr><th>Sender</th><th>Message</th><th>Time</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>InfoSMS</td>
+            <td><div class="msg-text">Your OTP is 123456</div></td>
+            <td>2026-06-12 17:00</td>
+          </tr>
+        </tbody>
+      </table>
     """
     soup    = BeautifulSoup(html_response, 'html.parser')
     results = []
 
-    # Method 1: Standard <tr><td> table
+    # ── Method 1: <table><tr><td> — standard ivasms structure ──
     rows = soup.find_all('tr')
     for row in rows:
         cols = row.find_all('td')
         if len(cols) < 2:
             continue
         sender_raw = safe_text(cols[0].get_text(strip=True)).upper()
-        if not sender_raw or sender_raw in ("SENDER", "SERVICE", "#", "NO.", "SL"):
+        skip_words = {"SENDER", "SERVICE", "FROM", "#", "NO.", "SL", "TIME", "DATE", ""}
+        if sender_raw in skip_words:
             continue
-        # Try multiple selectors for message cell
+
+        # Message column — try multiple ivasms-observed class names
+        msg_col = cols[1]
         msg_cell = (
-            cols[1].find('div', class_='msg-text')
-            or cols[1].find('div', class_='message')
-            or cols[1].find('span', class_='msg-text')
-            or cols[1].find('p')
-            or cols[1]
+            msg_col.find('div', class_='msg-text')
+            or msg_col.find('div', class_='message')
+            or msg_col.find('div', class_='msg')
+            or msg_col.find('span', class_='msg-text')
+            or msg_col.find('p')
         )
-        full_text = safe_text(msg_cell.get_text(separator=" ", strip=True)) if msg_cell else ""
-        if full_text and len(full_text) > 5:
+        full_text = safe_text(
+            msg_cell.get_text(separator=" ", strip=True) if msg_cell
+            else msg_col.get_text(separator=" ", strip=True)
+        )
+        if full_text and len(full_text) > 5 and full_text.upper() != sender_raw:
             results.append((sender_raw, full_text))
 
-    # Method 2: Fallback — scan raw text lines for OTP-like content
-    if not results:
-        raw_text = soup.get_text(separator="\n")
-        lines    = [l.strip() for l in raw_text.splitlines() if l.strip()]
-        for i, line in enumerate(lines):
-            if re.search(r'\d{4,8}', line) and len(line) > 8:
-                sender = lines[i - 1].upper() if i > 0 else "UNKNOWN"
+    if results:
+        return results
+
+    # ── Method 2: <sms>, <msg>, custom tags ivasms might use ──
+    for tag in soup.find_all(['sms', 'msg', 'message']):
+        sender_tag = tag.find(['sender', 'from', 'service'])
+        body_tag   = tag.find(['body', 'text', 'content', 'msg'])
+        if sender_tag and body_tag:
+            sender    = safe_text(sender_tag.get_text(strip=True)).upper()
+            full_text = safe_text(body_tag.get_text(separator=" ", strip=True))
+            if full_text and len(full_text) > 5:
+                results.append((sender, full_text))
+
+    if results:
+        return results
+
+    # ── Method 3: JSON response (some endpoints return JSON) ──
+    try:
+        data = json.loads(html_response)
+        items = data if isinstance(data, list) else data.get('data', data.get('sms', []))
+        for item in (items if isinstance(items, list) else []):
+            sender    = safe_text(str(item.get('sender', item.get('service', item.get('from', 'UNKNOWN'))))).upper()
+            full_text = safe_text(str(item.get('message', item.get('body', item.get('text', '')))))
+            if full_text and len(full_text) > 5:
+                results.append((sender, full_text))
+        if results:
+            return results
+    except Exception:
+        pass
+
+    # ── Method 4: Plain text line scan — last resort ──
+    raw_text = soup.get_text(separator="\n")
+    lines    = [l.strip() for l in raw_text.splitlines() if l.strip()]
+    for i, line in enumerate(lines):
+        # Only lines that look like SMS (contain digits + letters, > 10 chars)
+        if re.search(r'\d{4,8}', line) and len(line) > 10 and re.search(r'[A-Za-z]', line):
+            sender = lines[i - 1].upper() if i > 0 else "UNKNOWN"
+            if sender not in {"", "SENDER", "SERVICE"}:
                 results.append((sender, line))
 
     return results
@@ -426,138 +474,130 @@ def get_fresh_cookies_and_tokens():
     return None, None, None
 
 # ==========================================
-# UNIVERSAL RESPONSE PARSER (JSON + HTML + plain-text)
+# iVASMS-SPECIFIC RESPONSE PARSERS
+# ivasms uses: onclick="toggleRange('NAME','ID')"
+#              onclick="toggleNumDkNtn('PHONE', safe)"
 # ==========================================
+
+def extract_ranges_from_response(raw: str) -> list:
+    """
+    Extracts range names from ivasms range response.
+    Primary: onclick="toggleRange('CAMBODIA 3572','CAMBODIA_3572')"
+    Returns the FIRST argument (used as Range: param in number fetch).
+    """
+    # PRIMARY — ivasms-specific toggle pattern (most reliable)
+    ranges = re.findall(r"toggleRange\s*\(\s*['\"]([^'\"]+)['\"]", raw)
+    if ranges:
+        unique = list(dict.fromkeys(ranges))  # preserve order, dedupe
+        print(f"[DEBUG] Ranges via toggleRange(): {unique[:5]}")
+        return unique
+
+    # FALLBACK 1 — <option> tags
+    soup = BeautifulSoup(raw, 'html.parser')
+    opt_ranges = []
+    for opt in soup.find_all('option'):
+        val = opt.get('value', '').strip()
+        if val and val.lower() not in ('', '--', 'all', 'select'):
+            opt_ranges.append(val)
+    if opt_ranges:
+        print(f"[DEBUG] Ranges via <option>: {opt_ranges[:5]}")
+        return list(dict.fromkeys(opt_ranges))
+
+    # FALLBACK 2 — data-range / data-value attributes
+    attr_ranges = []
+    for tag in soup.find_all(True):
+        for attr in ['data-range', 'data-id', 'data-value']:
+            val = tag.get(attr, '').strip()
+            if val and len(val) > 2:
+                attr_ranges.append(val)
+    if attr_ranges:
+        print(f"[DEBUG] Ranges via data-attr: {attr_ranges[:5]}")
+        return list(dict.fromkeys(attr_ranges))
+
+    # FALLBACK 3 — text regex (COUNTRY NAME + digits)
+    plain      = soup.get_text(separator=" ")
+    text_found = re.findall(r'\b([A-Z]{2,}(?:\s+[A-Z]+)*\s+\d{1,8})\b', plain)
+    html_found = re.findall(r"['\"]([A-Z]{2,}(?:\s[A-Z]+)*\s\d{1,8})['\"]", raw)
+    all_found  = list(dict.fromkeys(text_found + html_found))
+    if all_found:
+        print(f"[DEBUG] Ranges via regex: {all_found[:5]}")
+        return all_found
+
+    print("[DEBUG] No ranges found in response.")
+    return []
+
+
 def extract_numbers_from_response(raw: str) -> list:
     """
-    Extracts phone-number-like strings from ANY response format.
-    Tries JSON first, then HTML option/select/data-attrs, then regex on plain text.
+    Extracts phone numbers from ivasms number list response.
+    Primary: onclick="toggleNumDkNtn('855XXXXXXX', 1)"
+    Also handles JSON arrays, <option> tags, data-* attrs, plain digit strings.
     """
     numbers = set()
 
-    # --- Try JSON ---
+    # PRIMARY — ivasms-specific toggle pattern
+    found = re.findall(r"toggleNumDkNtn\s*\(\s*['\"]([^'\"]+)['\"]", raw)
+    if found:
+        valid = [n for n in found if re.fullmatch(r'\d{6,15}', n.strip())]
+        if valid:
+            print(f"[DEBUG] Numbers via toggleNumDkNtn(): {valid[:5]}")
+            return list(dict.fromkeys(valid))
+
+    # FALLBACK 1 — JSON response
     try:
         data = json.loads(raw)
-        # Flatten all values from JSON and look for digit strings
-        def walk(obj):
+        def _walk(obj):
             if isinstance(obj, dict):
                 for v in obj.values():
-                    walk(v)
+                    _walk(v)
             elif isinstance(obj, list):
                 for item in obj:
-                    walk(item)
+                    _walk(item)
             elif isinstance(obj, (str, int)):
                 s = str(obj).strip()
                 if re.fullmatch(r'\d{6,15}', s):
                     numbers.add(s)
-        walk(data)
+        _walk(data)
         if numbers:
-            print(f"[DEBUG] Numbers from JSON: {list(numbers)[:5]}")
+            print(f"[DEBUG] Numbers via JSON: {list(numbers)[:5]}")
             return list(numbers)
     except Exception:
         pass
 
-    # --- Try HTML ---
+    # FALLBACK 2 — HTML tag attributes and text
     soup = BeautifulSoup(raw, 'html.parser')
-
-    # <option value="NUMBER"> or <option>NUMBER</option>
     for opt in soup.find_all('option'):
-        val = opt.get('value', '').strip()
-        txt = opt.get_text(strip=True)
-        for candidate in [val, txt]:
-            if re.fullmatch(r'\d{6,15}', candidate):
-                numbers.add(candidate)
+        for candidate in [opt.get('value', ''), opt.get_text(strip=True)]:
+            if re.fullmatch(r'\d{6,15}', candidate.strip()):
+                numbers.add(candidate.strip())
 
-    # data-number, data-value, data-id attributes
     for tag in soup.find_all(True):
-        for attr in ['data-number', 'data-value', 'data-id', 'data-phone', 'value']:
+        for attr in ['data-number', 'data-phone', 'data-id', 'data-value', 'value', 'id']:
             val = tag.get(attr, '').strip()
             if re.fullmatch(r'\d{6,15}', val):
                 numbers.add(val)
 
-    # <td> or <span> containing only digits
-    for tag in soup.find_all(['td', 'span', 'div', 'p', 'li', 'a']):
+    for tag in soup.find_all(['td', 'span', 'div', 'p', 'li', 'a', 'num']):
         txt = tag.get_text(strip=True)
         if re.fullmatch(r'\d{6,15}', txt):
             numbers.add(txt)
 
     if numbers:
-        print(f"[DEBUG] Numbers from HTML attrs/tags: {list(numbers)[:5]}")
+        print(f"[DEBUG] Numbers via HTML: {list(numbers)[:5]}")
         return list(numbers)
 
-    # --- Regex fallback on raw text ---
-    plain = soup.get_text(separator=" ")
-    found = re.findall(r'(?<!\d)(\d{6,15})(?!\d)', plain)
-    # Also check raw HTML for quoted digit strings
-    found += re.findall(r'["\'](\d{6,15})["\']', raw)
-    numbers.update(found)
+    # FALLBACK 3 — quoted digit strings in raw HTML / JS
+    quoted = re.findall(r'["\'](\d{6,15})["\']', raw)
+    numbers.update(quoted)
+
+    # FALLBACK 4 — unquoted digit strings in plain text
+    plain  = soup.get_text(separator=" ")
+    inline = re.findall(r'(?<!\d)(\d{6,15})(?!\d)', plain)
+    numbers.update(inline)
 
     if numbers:
-        print(f"[DEBUG] Numbers from regex fallback: {list(numbers)[:5]}")
+        print(f"[DEBUG] Numbers via regex fallback: {list(numbers)[:5]}")
     return list(numbers)
-
-
-def extract_ranges_from_response(raw: str) -> list:
-    """
-    Extracts range identifiers from the getsms response.
-    Handles JSON arrays, <option> tags, data-* attrs, and text patterns.
-    """
-    ranges = set()
-
-    # --- Try JSON ---
-    try:
-        data = json.loads(raw)
-        def walk(obj):
-            if isinstance(obj, dict):
-                for v in obj.values():
-                    walk(v)
-            elif isinstance(obj, list):
-                for item in obj:
-                    walk(item)
-            elif isinstance(obj, str):
-                s = obj.strip()
-                if s and len(s) > 1:
-                    ranges.add(s)
-        walk(data)
-        if ranges:
-            print(f"[DEBUG] Ranges from JSON: {list(ranges)[:5]}")
-            return [r for r in ranges if any(c.isdigit() for c in r) or len(r) > 2]
-    except Exception:
-        pass
-
-    soup = BeautifulSoup(raw, 'html.parser')
-
-    # <option value="RANGE">
-    for opt in soup.find_all('option'):
-        val = opt.get('value', '').strip()
-        txt = opt.get_text(strip=True)
-        for candidate in [val, txt]:
-            if candidate and candidate.lower() not in ('', 'select', 'all', '--'):
-                ranges.add(candidate)
-
-    # data-range, data-value attributes
-    for tag in soup.find_all(True):
-        for attr in ['data-range', 'data-value', 'value']:
-            val = tag.get(attr, '').strip()
-            if val and len(val) > 1 and val.lower() not in ('', 'on', 'off', 'true', 'false'):
-                ranges.add(val)
-
-    if ranges:
-        valid = [r for r in ranges if any(c.isdigit() for c in r)]
-        if valid:
-            print(f"[DEBUG] Ranges from HTML: {valid[:5]}")
-            return valid
-
-    # Text pattern fallback
-    plain = soup.get_text(separator=" ")
-    found_text = re.findall(r'\b[A-Z]{2,}(?:\s+[A-Z]+)*\s+\d{1,8}\b', plain)
-    found_html = re.findall(r'["\']([A-Z]{2,}(?:\s+[A-Z]+)*\s+\d{1,8})["\']', raw)
-    found_num  = re.findall(r'["\'](\d{1,8})["\']', raw)
-
-    all_found = list(set(found_text + found_html + found_num))
-    if all_found:
-        print(f"[DEBUG] Ranges from regex: {all_found[:5]}")
-    return all_found
 
 
 # ==========================================
