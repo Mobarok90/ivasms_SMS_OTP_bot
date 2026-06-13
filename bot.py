@@ -557,8 +557,10 @@ def selenium_scan_date(driver, target_date: str) -> list:
 
         if ranges_html:
             print(f"[SCAN] getsms response: {len(ranges_html)} chars")
-            # Debug: show first 400 chars
-            print(f"[DEBUG] getsms preview: {ranges_html[:400].replace(chr(10),' ')}")
+            # Print FULL response in 500-char chunks (numbers may be after char 400!)
+            clean = ranges_html.replace('\n', ' ')
+            for ci in range(0, min(len(clean), 3000), 500):
+                print(f"[DEBUG] getsms[{ci}:{ci+500}]: {clean[ci:ci+500]}")
 
         # Parse range list from AJAX response
         range_pairs = []
@@ -583,8 +585,8 @@ def selenium_scan_date(driver, target_date: str) -> list:
                 range_pairs = list(dict.fromkeys(range_pairs))
                 if range_pairs:
                     print(f"[SCAN] DOM fallback found {len(range_pairs)} range(s)")
+                    ranges_html = page_src  # use page source as ranges_html
                 else:
-                    # Print page preview for debugging
                     preview = page_src[:800].replace('\n', ' ')
                     print(f"[DEBUG] Page source preview: {preview}")
             except Exception:
@@ -600,28 +602,47 @@ def selenium_scan_date(driver, target_date: str) -> list:
         # ── Process each range ─────────────────────────────────────────
         for display_name, css_id in range_pairs:
 
-            # Fetch number list via browser AJAX
-            num_html = _browser_ajax(
-                driver,
-                "/portal/sms/received/getsms/number",
-                {"_token": csrf, "Range": css_id,
-                 "start": target_date, "end": target_date},
-            )
-
-            if num_html.startswith("AJAX_ERR") or not num_html.strip():
-                print(f"[WARN] getsms/number AJAX failed for {css_id}: {num_html[:60]}")
-                num_html = ""
-
-            # Extract phone numbers from number-list HTML
+            # ── STEP A: Try extracting numbers from the getsms response itself ──
+            # The getsms response sub-divs (id="sp_CSS_ID") contain phone numbers.
+            # Pattern: <div id="sp_CAMBODIA_5058">..toggleNum*(85566550030, 1)..</div>
             numbers = []
-            if num_html:
-                print(f"[DEBUG] getsms/number for {css_id}: {len(num_html)} chars")
-                print(f"[DEBUG] num preview: {num_html[:300].replace(chr(10),' ')}")
-                numbers = extract_numbers_from_response(num_html)
+            if ranges_html:
+                # Extract sub-div content for this specific range
+                sub_pattern = (
+                    r'id=["\']sp_' + re.escape(css_id) + r'["\'][^>]*>'
+                    r'([\s\S]*?)'
+                    r'(?=<div[^>]*class=["\'][^"\']*rng|<div[^>]*id=["\']sp_[A-Z]|$)'
+                )
+                sub_match = re.search(sub_pattern, ranges_html)
+                if sub_match:
+                    sub_html = sub_match.group(1)
+                    numbers = extract_numbers_from_response(sub_html)
+                    if numbers:
+                        print(f"[SCAN] Numbers from getsms sub-div '{css_id}': {numbers[:3]}")
 
-            # If still no numbers, try DOM click approach
+            # ── STEP B: If getsms sub-div had no numbers, call getsms/number ──
+            num_html = ""
             if not numbers:
-                print(f"[SCAN] AJAX gave no numbers for {css_id} — trying DOM click...")
+                num_html = _browser_ajax(
+                    driver,
+                    "/portal/sms/received/getsms/number",
+                    {"_token": csrf, "Range": css_id,
+                     "start": target_date, "end": target_date},
+                )
+                if num_html.startswith("AJAX_ERR") or not num_html.strip():
+                    print(f"[WARN] getsms/number failed for {css_id}: {num_html[:60]}")
+                    num_html = ""
+
+                if num_html:
+                    print(f"[DEBUG] getsms/number for {css_id}: {len(num_html)} chars")
+                    clean_n = num_html.replace('\n', ' ')
+                    for ci in range(0, min(len(clean_n), 1500), 500):
+                        print(f"[DEBUG] numResp[{ci}:{ci+500}]: {clean_n[ci:ci+500]}")
+                    numbers = extract_numbers_from_response(num_html)
+
+            # ── STEP C: DOM click fallback ──────────────────────────────
+            if not numbers:
+                print(f"[SCAN] Trying DOM click for {css_id}...")
                 numbers = _dom_click_range_get_numbers(driver, css_id, display_name)
 
             if not numbers:
@@ -631,13 +652,15 @@ def selenium_scan_date(driver, target_date: str) -> list:
             print(f"[SCAN] Range '{display_name}' → {len(numbers)} number(s): {numbers[:3]}")
 
             # ── Fetch SMS for each number via browser AJAX ─────────────
-            # Try to extract numeric Range ID from num_html script block
+            # Extract numeric Range ID from num_html (or ranges_html) script block
             numeric_range_id = css_id
-            if num_html:
-                nids = re.findall(r"Range\s*:\s*['\"]?(\d+)['\"]?", num_html)
-                if nids:
-                    numeric_range_id = nids[0]
-                    print(f"[DEBUG] Using numeric Range ID: {numeric_range_id}")
+            for src in [num_html, ranges_html]:
+                if src:
+                    nids = re.findall(r"Range\s*:\s*['\"]?(\d+)['\"]?", src)
+                    if nids:
+                        numeric_range_id = nids[0]
+                        print(f"[DEBUG] Numeric Range ID: {numeric_range_id}")
+                        break
 
             for phone in numbers:
                 sms_html = _browser_ajax(
@@ -894,36 +917,38 @@ def extract_ranges_from_response(raw: str):
 
 def extract_numbers_from_response(raw: str) -> list:
     """
-    Extracts phone numbers from ivasms number-list response.
+    Extracts phone numbers from ivasms number-list / range-list response.
 
     ivasms-observed patterns (in order of reliability):
-      A) id="PHONE-safe"            → from jQuery $('#'+id+'-safe') in toggleNumDkNtn
-      B) toggleNumDkNtn(PHONE, ...) → unquoted number in onclick
-      C) toggleNumDkNtn('PHONE',..) → quoted number in onclick
+      A) id="PHONE-safe"                 → jQuery $('#'+id+'-safe') pattern
+      B) toggleNum*(PHONE, ...)          → ANY randomised function name (unquoted)
+      C) toggleNum*('PHONE', ...)        → ANY randomised function name (quoted)
       D) data-id / data-number attrs
       E) <option value="PHONE">
       F) JSON array/object walk
-      G) Plain text regex fallback
+      G) Quoted digit strings anywhere in HTML/JS
+      H) Unquoted in plain text (last resort)
     """
     numbers = set()
 
-    # ── A: id="PHONE-safe" ── (most reliable ivasms pattern)
-    # JS does: $('#'+id+'-safe') so elements have id="PHONENUMBER-safe"
+    # ── A: id="PHONE-safe" ── (most reliable — always consistent)
     pat_a = re.findall(r'id=["\'](\d{6,15})-safe["\']', raw)
     if pat_a:
         print(f"[DEBUG] Numbers via id='X-safe': {pat_a[:5]}")
         return list(dict.fromkeys(pat_a))
 
-    # ── B: toggleNumDkNtn(PHONE, ...) — UNQUOTED (most common in ivasms) ──
-    pat_b = re.findall(r'toggleNumDkNtn\s*\(\s*(\d{6,15})\s*[,)]', raw)
+    # ── B: ANY toggleNum* function call — UNQUOTED ──
+    # ivasms randomises the function name per response to prevent scraping
+    # e.g.: toggleNumFyOj(85566550030, 1)  or  toggleNumDkNtn(85561234567, 1)
+    pat_b = re.findall(r'toggleNum\w+\s*\(\s*(\d{6,15})\s*[,)]', raw)
     if pat_b:
-        print(f"[DEBUG] Numbers via toggleNumDkNtn(unquoted): {pat_b[:5]}")
+        print(f"[DEBUG] Numbers via toggleNum*(unquoted): {pat_b[:5]}")
         return list(dict.fromkeys(pat_b))
 
-    # ── C: toggleNumDkNtn('PHONE', ...) — QUOTED ──
-    pat_c = re.findall(r"toggleNumDkNtn\s*\(\s*['\"](\d{6,15})['\"]", raw)
+    # ── C: ANY toggleNum* function call — QUOTED ──
+    pat_c = re.findall(r"toggleNum\w+\s*\(\s*['\"](\d{6,15})['\"]", raw)
     if pat_c:
-        print(f"[DEBUG] Numbers via toggleNumDkNtn(quoted): {pat_c[:5]}")
+        print(f"[DEBUG] Numbers via toggleNum*(quoted): {pat_c[:5]}")
         return list(dict.fromkeys(pat_c))
 
     # ── D: data-id / data-number / data-phone HTML attributes ──
