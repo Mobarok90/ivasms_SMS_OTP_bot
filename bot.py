@@ -467,220 +467,368 @@ def login_and_get_driver():
 # Uses the live browser to click ranges/numbers and read the DOM.
 # This is the ONLY reliable method — API calls return only a JS function definition.
 # ==========================================
+def _browser_ajax(driver, url_path: str, data: dict, timeout_ms: int = 20000) -> str:
+    """
+    Execute a jQuery AJAX POST from within the authenticated Selenium browser.
+    Returns response text, or '' on failure.
+    All browser cookies (including HttpOnly) are sent automatically — this is
+    the key difference from cloudscraper which missed HttpOnly cookies.
+    """
+    # Build JS data object literal
+    data_pairs = ", ".join(
+        f"{repr(k)}: {repr(str(v))}" for k, v in data.items()
+    )
+    js = f"""
+    var callback = arguments[arguments.length - 1];
+    if (typeof $ === 'undefined') {{
+        callback('NO_JQUERY');
+        return;
+    }}
+    $.ajax({{
+        url: '{url_path}',
+        type: 'POST',
+        data: {{ {data_pairs} }},
+        timeout: {timeout_ms},
+        success: function(html) {{ callback(html || ''); }},
+        error: function(x, t, e) {{
+            callback('AJAX_ERR:' + x.status + ':' + t);
+        }}
+    }});
+    """
+    try:
+        driver.set_script_timeout(timeout_ms // 1000 + 5)
+        result = driver.execute_async_script(js)
+        return str(result) if result else ""
+    except Exception as ex:
+        print(f"[WARN] browser_ajax({url_path}) failed: {ex}")
+        return ""
+
+
 def selenium_scan_date(driver, target_date: str) -> list:
     """
-    Use the live Selenium browser to extract all SMS for target_date.
+    Extract all SMS for target_date using the live authenticated browser.
+    Strategy:
+      1. Make sure we are on the received-SMS page (navigate only if needed).
+      2. PRIMARY: Use jQuery AJAX from browser context — sends ALL cookies
+         (including HttpOnly) so the server returns real data.
+      3. FALLBACK: Interact with the page DOM directly (click buttons/ranges).
     Returns list of (phone, range_name, service, sms_text) tuples.
     """
     results = []
 
     try:
-        # Navigate to the received SMS page
-        driver.get("https://www.ivasms.com/portal/sms/received")
-        time.sleep(4)
-
-        # ── Set start and end dates via JavaScript ──
-        driver.execute_script("""
-            var s = document.querySelector('input[name="start"], #start, input[type="date"][id*="start"]');
-            var e = document.querySelector('input[name="end"],   #end,   input[type="date"][id*="end"]');
-            if (s) s.value = arguments[0];
-            if (e) e.value = arguments[1];
-        """, target_date, target_date)
-        time.sleep(0.5)
-
-        # ── Click "Get SMS" / submit button ──
-        clicked_btn = False
-        for sel in [
-            ".btn-success", "button[type='submit']", ".btn-sms",
-            "button.btn", "input[type='submit']",
-        ]:
-            try:
-                driver.click(sel)
-                clicked_btn = True
-                break
-            except Exception:
-                pass
-        if not clicked_btn:
-            # fallback: submit via JS
-            try:
-                driver.execute_script(
-                    "var f = document.querySelector('form'); if(f) f.submit();"
-                )
-            except Exception:
-                pass
-
-        time.sleep(5)  # wait for AJAX range list to load
-
-        # ── Get all range divs ──
+        # ── Ensure we are on the received-SMS page ──────────────────────
         try:
-            range_divs = driver.find_elements("css selector", ".rng")
+            cur = driver.current_url
         except Exception:
-            range_divs = []
+            cur = ""
 
-        if not range_divs:
-            print(f"[SCAN] No .rng divs found for {target_date}.")
+        if "received" not in cur:
+            print(f"[SCAN] Not on received page — navigating (current: {cur[:60]})")
+            driver.get("https://www.ivasms.com/portal/sms/received")
+            time.sleep(6)
+
+        # ── Get CSRF token from page meta tag ──────────────────────────
+        csrf = driver.execute_script("""
+            try {
+                var m = document.querySelector("meta[name='csrf-token']");
+                if (m) return m.getAttribute('content');
+            } catch(e) {}
+            try {
+                var inp = document.querySelector("input[name='_token']");
+                if (inp) return inp.value;
+            } catch(e) {}
+            return '';
+        """) or ""
+        print(f"[SCAN] CSRF token: {'OK (' + csrf[:8] + '...)' if csrf else 'MISSING'}")
+
+        # ══════════════════════════════════════════════════════════════
+        # PRIMARY: jQuery AJAX from browser — uses ALL browser cookies
+        # ══════════════════════════════════════════════════════════════
+        ranges_html = _browser_ajax(
+            driver,
+            "/portal/sms/received/getsms",
+            {"_token": csrf, "start": target_date, "end": target_date},
+        )
+
+        if ranges_html.startswith("AJAX_ERR") or ranges_html == "NO_JQUERY" or not ranges_html.strip():
+            print(f"[WARN] getsms AJAX failed: {ranges_html[:100]}")
+            ranges_html = ""
+
+        if ranges_html:
+            print(f"[SCAN] getsms response: {len(ranges_html)} chars")
+            # Debug: show first 400 chars
+            print(f"[DEBUG] getsms preview: {ranges_html[:400].replace(chr(10),' ')}")
+
+        # Parse range list from AJAX response
+        range_pairs = []
+        if ranges_html:
+            range_pairs = re.findall(
+                r"toggleRange\s*\(\s*['\"]([^'\"]+)['\"].*?['\"]([^'\"]+)['\"]",
+                ranges_html
+            )
+            range_pairs = list(dict.fromkeys(range_pairs))  # dedupe
+
+        # ── FALLBACK: DOM form submit if AJAX gave nothing ─────────────
+        if not range_pairs:
+            print(f"[SCAN] AJAX gave no ranges — trying DOM form submit for {target_date}...")
+            _dom_submit_sms_form(driver, target_date)
+            # Parse from DOM after form submit
+            try:
+                page_src = driver.page_source or ""
+                range_pairs = re.findall(
+                    r"toggleRange\s*\(\s*['\"]([^'\"]+)['\"].*?['\"]([^'\"]+)['\"]",
+                    page_src
+                )
+                range_pairs = list(dict.fromkeys(range_pairs))
+                if range_pairs:
+                    print(f"[SCAN] DOM fallback found {len(range_pairs)} range(s)")
+                else:
+                    # Print page preview for debugging
+                    preview = page_src[:800].replace('\n', ' ')
+                    print(f"[DEBUG] Page source preview: {preview}")
+            except Exception:
+                pass
+
+        if not range_pairs:
+            print(f"[SCAN] No ranges found for {target_date}.")
             return results
 
-        print(f"[SCAN] Found {len(range_divs)} range(s) for {target_date}.")
+        print(f"[SCAN] {len(range_pairs)} range(s) for {target_date}: "
+              f"{[p[0] for p in range_pairs[:3]]}")
 
-        for rng_idx, rng_div in enumerate(range_divs):
-            # ── Get range name ──
-            range_name = "UNKNOWN"
-            for name_sel in [".name", ".c-name", "span.name"]:
-                try:
-                    range_name = rng_div.find_element("css selector", name_sel).text.strip()
-                    if range_name:
-                        break
-                except Exception:
-                    pass
+        # ── Process each range ─────────────────────────────────────────
+        for display_name, css_id in range_pairs:
 
-            # Skip ranges with 0 count
-            count_text = "0"
-            try:
-                count_text = rng_div.find_element("css selector", ".v-count").text.strip()
-            except Exception:
-                pass
-            if count_text in ("0", ""):
+            # Fetch number list via browser AJAX
+            num_html = _browser_ajax(
+                driver,
+                "/portal/sms/received/getsms/number",
+                {"_token": csrf, "Range": css_id,
+                 "start": target_date, "end": target_date},
+            )
+
+            if num_html.startswith("AJAX_ERR") or not num_html.strip():
+                print(f"[WARN] getsms/number AJAX failed for {css_id}: {num_html[:60]}")
+                num_html = ""
+
+            # Extract phone numbers from number-list HTML
+            numbers = []
+            if num_html:
+                print(f"[DEBUG] getsms/number for {css_id}: {len(num_html)} chars")
+                print(f"[DEBUG] num preview: {num_html[:300].replace(chr(10),' ')}")
+                numbers = extract_numbers_from_response(num_html)
+
+            # If still no numbers, try DOM click approach
+            if not numbers:
+                print(f"[SCAN] AJAX gave no numbers for {css_id} — trying DOM click...")
+                numbers = _dom_click_range_get_numbers(driver, css_id, display_name)
+
+            if not numbers:
+                print(f"[WARN] No numbers found for range '{display_name}'")
                 continue
 
-            print(f"[SCAN] Range '{range_name}' count={count_text} — clicking to expand...")
+            print(f"[SCAN] Range '{display_name}' → {len(numbers)} number(s): {numbers[:3]}")
 
-            # ── Click the range to expand it ──
-            try:
-                driver.execute_script("arguments[0].click();", rng_div)
-            except Exception:
-                try:
-                    rng_div.click()
-                except Exception:
-                    print(f"[WARN] Could not click range {range_name}")
-                    continue
-            time.sleep(3)
+            # ── Fetch SMS for each number via browser AJAX ─────────────
+            # Try to extract numeric Range ID from num_html script block
+            numeric_range_id = css_id
+            if num_html:
+                nids = re.findall(r"Range\s*:\s*['\"]?(\d+)['\"]?", num_html)
+                if nids:
+                    numeric_range_id = nids[0]
+                    print(f"[DEBUG] Using numeric Range ID: {numeric_range_id}")
 
-            # ── Find the sub-div that was populated ──
-            # It's the next sibling div with class "sub"
-            sub_div = None
-            try:
-                # Try finding via JS sibling traversal
-                sub_div = driver.execute_script(
-                    "return arguments[0].nextElementSibling;", rng_div
+            for phone in numbers:
+                sms_html = _browser_ajax(
+                    driver,
+                    "/portal/sms/received/getsms/number/sms",
+                    {"_token": csrf, "Range": numeric_range_id,
+                     "Number": phone, "start": target_date, "end": target_date},
                 )
-            except Exception:
-                pass
 
-            if sub_div is None:
-                print(f"[WARN] No sub-div found after range {range_name}")
-                continue
+                if not sms_html or sms_html.startswith("AJAX_ERR"):
+                    print(f"[WARN] SMS AJAX failed for {phone}: {sms_html[:60]}")
+                    # Fallback: try clicking in DOM
+                    sms_html = _dom_click_number_get_sms(driver, phone)
 
-            # ── Extract phone numbers from sub-div ──
-            num_divs = []
-            try:
-                num_divs = sub_div.find_elements("css selector", ".num")
-            except Exception:
-                pass
-
-            if not num_divs:
-                # Fallback: look for any element with onclick containing a number
-                try:
-                    num_divs = sub_div.find_elements("xpath",
-                        ".//*[contains(@onclick,'toggleNumDkNtn')]")
-                except Exception:
-                    pass
-
-            if not num_divs:
-                print(f"[WARN] No number elements in range {range_name}")
-                # Debug: print sub_div HTML
-                try:
-                    sub_html = sub_div.get_attribute("innerHTML")[:500]
-                    print(f"[DEBUG] sub_div HTML: {sub_html.replace(chr(10),' ')}")
-                except Exception:
-                    pass
-                continue
-
-            print(f"[SCAN] Range '{range_name}' — {len(num_divs)} number(s)")
-
-            for num_el in num_divs:
-                # ── Extract phone number ──
-                phone = ""
-
-                # Try: onclick="toggleNumDkNtn(PHONE, ...)"
-                try:
-                    onclick = num_el.get_attribute("onclick") or ""
-                    m = re.search(r'toggleNumDkNtn\s*\(\s*[\'"]?(\d{6,15})', onclick)
-                    if m:
-                        phone = m.group(1)
-                except Exception:
-                    pass
-
-                # Try: text content (.n-num span)
-                if not phone:
-                    for ph_sel in [".n-num", ".num-text", "span", "div"]:
-                        try:
-                            txt = num_el.find_element("css selector", ph_sel).text.strip()
-                            digits = re.sub(r'\D', '', txt)
-                            if 6 <= len(digits) <= 15:
-                                phone = digits
-                                break
-                        except Exception:
-                            pass
-
-                # Try: element text directly
-                if not phone:
-                    try:
-                        txt = num_el.text.strip()
-                        digits = re.sub(r'\D', '', txt.split()[0] if txt else "")
-                        if 6 <= len(digits) <= 15:
-                            phone = digits
-                    except Exception:
-                        pass
-
-                if not phone:
-                    print(f"[WARN] Could not extract phone from num element")
+                if not sms_html or not sms_html.strip():
+                    print(f"[WARN] No SMS HTML for {phone}")
                     continue
 
-                # ── Click number to load SMS ──
-                try:
-                    driver.execute_script("arguments[0].click();", num_el)
-                except Exception:
-                    try:
-                        num_el.click()
-                    except Exception:
-                        print(f"[WARN] Could not click number {phone}")
-                        continue
-                time.sleep(3)
-
-                # ── Extract SMS from the loaded div (id="{phone}-safe") ──
-                sms_html = ""
-                for sms_sel in [
-                    f"#{phone}-safe",
-                    f"[id='{phone}-safe']",
-                    f"div[id$='-safe']",
-                ]:
-                    try:
-                        sms_el = driver.find_element("css selector", sms_sel)
-                        sms_html = sms_el.get_attribute("innerHTML") or ""
-                        if sms_html.strip():
-                            break
-                    except Exception:
-                        pass
-
-                if not sms_html.strip():
-                    print(f"[WARN] SMS div empty or not found for {phone}")
-                    continue
-
-                print(f"[DEBUG] SMS HTML for {phone} ({len(sms_html)} chars): "
+                print(f"[DEBUG] SMS for {phone} ({len(sms_html)} chars): "
                       f"{sms_html[:200].replace(chr(10),' ')}")
 
                 sms_list = parse_sms_html(sms_html)
                 if not sms_list:
-                    print(f"[WARN] parse_sms_html returned 0 results for {phone}")
-                else:
-                    for service, text in sms_list:
-                        results.append((phone, range_name, service, text))
+                    print(f"[WARN] parse_sms_html returned 0 items for {phone}")
+                for service, text in sms_list:
+                    results.append((phone, display_name, service, text))
 
     except Exception as e:
-        print(f"[ERROR] selenium_scan_date({target_date}) failed: {e}")
+        print(f"[ERROR] selenium_scan_date({target_date}) crashed: {e}")
 
     return results
+
+
+# ── DOM helper: submit the "Get SMS" form on the current page ──────────────
+def _dom_submit_sms_form(driver, target_date: str):
+    """Fill in the date form and click Get SMS on the currently loaded page."""
+    try:
+        # Set dates via JS and fire change events
+        driver.execute_script("""
+            var fields = [
+                ['input[name="start"]','#start','input[id*="start"]'],
+                ['input[name="end"]',  '#end',  'input[id*="end"]']
+            ];
+            var val = arguments[0];
+            fields.forEach(function(sels, i) {
+                sels.forEach(function(sel) {
+                    var el = document.querySelector(sel);
+                    if (el) {
+                        el.value = val;
+                        el.dispatchEvent(new Event('input',   {bubbles:true}));
+                        el.dispatchEvent(new Event('change',  {bubbles:true}));
+                    }
+                });
+            });
+        """, target_date)
+        time.sleep(0.5)
+
+        # Click submit button — try multiple selectors
+        clicked = False
+        for sel in [
+            "button[type='submit']",
+            "input[type='submit']",
+            ".btn-warning",
+            ".btn-success",
+            ".btn-primary",
+            "button.btn",
+        ]:
+            try:
+                el = driver.find_element("css selector", sel)
+                driver.execute_script("arguments[0].click();", el)
+                clicked = True
+                print(f"[SCAN] Clicked button: {sel}")
+                break
+            except Exception:
+                pass
+
+        if not clicked:
+            # Last resort: submit first form
+            driver.execute_script(
+                "var f=document.querySelector('form'); if(f) f.submit();"
+            )
+
+        # Wait for AJAX ranges to load (up to 12 seconds)
+        for _ in range(24):
+            time.sleep(0.5)
+            try:
+                elems = driver.find_elements("css selector", ".rng")
+                if elems:
+                    print(f"[SCAN] .rng divs appeared after form submit ({len(elems)})")
+                    return
+            except Exception:
+                pass
+
+        print("[WARN] .rng divs did not appear within 12s after form submit")
+
+    except Exception as e:
+        print(f"[WARN] _dom_submit_sms_form failed: {e}")
+
+
+# ── DOM helper: click a range div and extract phone numbers ───────────────
+def _dom_click_range_get_numbers(driver, css_id: str, display_name: str) -> list:
+    """
+    Click on the range element in the DOM to trigger toggleRange AJAX,
+    then extract phone numbers from the populated sub-div.
+    """
+    numbers = []
+    try:
+        # Find the range div by its data or onclick attributes
+        rng_div = None
+        for sel in [
+            f"[onclick*=\"'{css_id}'\"]",
+            f"[onclick*='{display_name}']",
+            ".rng",
+        ]:
+            try:
+                candidates = driver.find_elements("css selector", sel)
+                if candidates:
+                    rng_div = candidates[0]
+                    break
+            except Exception:
+                pass
+
+        if rng_div is None:
+            print(f"[WARN] DOM: range div not found for {css_id}")
+            return numbers
+
+        # Click to expand
+        driver.execute_script("arguments[0].scrollIntoView(true);", rng_div)
+        time.sleep(0.3)
+        driver.execute_script("arguments[0].click();", rng_div)
+
+        # Wait for sub-div to populate
+        sub_id = f"sp_{css_id}"
+        for _ in range(14):
+            time.sleep(0.5)
+            try:
+                sub = driver.find_element("css selector", f"#{sub_id}")
+                inner = sub.get_attribute("innerHTML") or ""
+                if len(inner.strip()) > 50:
+                    numbers = extract_numbers_from_response(inner)
+                    if numbers:
+                        print(f"[SCAN] DOM click got {len(numbers)} numbers for {css_id}")
+                    else:
+                        print(f"[DEBUG] sub div innerHTML: {inner[:300].replace(chr(10),' ')}")
+                    return numbers
+            except Exception:
+                pass
+
+        print(f"[WARN] DOM: sub-div #{sub_id} did not populate")
+
+    except Exception as e:
+        print(f"[WARN] _dom_click_range_get_numbers({css_id}): {e}")
+
+    return numbers
+
+
+# ── DOM helper: click a phone number element and read SMS from safe-div ───
+def _dom_click_number_get_sms(driver, phone: str) -> str:
+    """Click on the phone number element; return the innerHTML of #{phone}-safe."""
+    try:
+        # Click the num element that matches this phone
+        for sel in [
+            f"[onclick*='{phone}']",
+            f".num",
+        ]:
+            try:
+                els = driver.find_elements("css selector", sel)
+                for el in els:
+                    txt = el.text or el.get_attribute("onclick") or ""
+                    if phone in txt:
+                        driver.execute_script("arguments[0].click();", el)
+                        break
+                break
+            except Exception:
+                pass
+
+        # Wait for safe-div to load
+        for _ in range(10):
+            time.sleep(0.7)
+            try:
+                safe_el = driver.find_element("css selector", f"#{phone}-safe")
+                inner = safe_el.get_attribute("innerHTML") or ""
+                if len(inner.strip()) > 30:
+                    return inner
+            except Exception:
+                pass
+
+    except Exception as e:
+        print(f"[WARN] _dom_click_number_get_sms({phone}): {e}")
+
+    return ""
 
 # ==========================================
 # iVASMS-SPECIFIC RESPONSE PARSERS
